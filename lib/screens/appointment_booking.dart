@@ -973,41 +973,51 @@ class _AppointmentBookingScreenState extends State<AppointmentBookingScreen> {
     final remoteVitals = _remoteVitalsResult;
     if (heightWeight == null || remoteVitals == null) return;
 
+    final vitals = [
+      {
+        'vital_type': 'Height',
+        'value': '${heightWeight.heightCm.toStringAsFixed(1)} cm',
+        'source': 'camera',
+      },
+      {
+        'vital_type': 'Weight',
+        'value': '${heightWeight.weightKg.toStringAsFixed(1)} kg',
+        'source': 'camera',
+      },
+      {
+        'vital_type': 'Heart Rate',
+        'value': '${remoteVitals.heartRateBpm} bpm',
+        'source': 'app',
+      },
+      {
+        'vital_type': 'Blood Pressure',
+        'value': '${remoteVitals.systolic}/${remoteVitals.diastolic} mmHg',
+        'source': 'app',
+      },
+      {
+        'vital_type': 'Oxygen',
+        'value': '${remoteVitals.oxygenPercent}%',
+        'source': 'app',
+      },
+      {
+        'vital_type': 'Breathing Rate',
+        'value': '${remoteVitals.breathingRateRpm} rpm',
+        'source': 'app',
+      },
+    ];
+
+    if (remoteVitals.hasVerifiedTemperature) {
+      vitals.add({
+        'vital_type': 'Temperature',
+        'value': '${remoteVitals.temperatureC!.toStringAsFixed(1)} C',
+        'source': 'camera',
+      });
+    }
+
     await BackendApi.createVitals(
       patientId: patientId,
       appointmentId: appointmentId,
-      vitals: [
-        {
-          'vital_type': 'Height',
-          'value': '${heightWeight.heightCm.toStringAsFixed(1)} cm',
-          'source': 'camera',
-        },
-        {
-          'vital_type': 'Weight',
-          'value': '${heightWeight.weightKg.toStringAsFixed(1)} kg',
-          'source': 'camera',
-        },
-        {
-          'vital_type': 'Heart Rate',
-          'value': '${remoteVitals.heartRateBpm} bpm',
-          'source': 'app',
-        },
-        {
-          'vital_type': 'Blood Pressure',
-          'value': '${remoteVitals.systolic}/${remoteVitals.diastolic} mmHg',
-          'source': 'app',
-        },
-        {
-          'vital_type': 'Oxygen',
-          'value': '${remoteVitals.oxygenPercent}%',
-          'source': 'app',
-        },
-        {
-          'vital_type': 'Breathing Rate',
-          'value': '${remoteVitals.breathingRateRpm} rpm',
-          'source': 'app',
-        },
-      ],
+      vitals: vitals,
     );
   }
 

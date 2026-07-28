@@ -502,6 +502,13 @@ class _VitalsGrid extends StatelessWidget {
           value: '${result.oxygenPercent}',
           unit: '%',
         ),
+        if (result.hasVerifiedTemperature)
+          _VitalMetric(
+            icon: Icons.thermostat_outlined,
+            title: 'Temperature',
+            value: result.temperatureC!.toStringAsFixed(1),
+            unit: 'C',
+          ),
       ],
     );
   }

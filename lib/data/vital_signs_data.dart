@@ -42,6 +42,8 @@ class RemoteVitalResult {
     required this.oxygenPercent,
     required this.confidence,
     required this.measuredAt,
+    this.temperatureC,
+    this.thermalFaceRecognitionConfirmed = false,
   });
 
   final int heartRateBpm;
@@ -51,6 +53,11 @@ class RemoteVitalResult {
   final int oxygenPercent;
   final String confidence;
   final DateTime measuredAt;
+  final double? temperatureC;
+  final bool thermalFaceRecognitionConfirmed;
+
+  bool get hasVerifiedTemperature =>
+      thermalFaceRecognitionConfirmed && temperatureC != null;
 }
 
 const vitalSignCards = [
