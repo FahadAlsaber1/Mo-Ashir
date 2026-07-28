@@ -91,6 +91,17 @@ class CreateMedicationRequest(BaseModel):
     active: bool = True
 
 
+class CreateVitalRequest(BaseModel):
+    vital_type: str
+    value: str
+    source: str = "app"
+
+
+class CreateVitalsRequest(BaseModel):
+    appointment_id: str | None = None
+    vitals: list[CreateVitalRequest]
+
+
 class UpdateAppointmentStatusRequest(BaseModel):
     status: str
 
@@ -501,6 +512,59 @@ def list_patient_vitals(patient_id: str) -> dict[str, Any]:
         raise HTTPException(
             status_code=503,
             detail="Could not read vitals from Supabase.",
+        ) from exc
+
+    return {"vitals": response.data or []}
+
+
+@app.post("/api/patients/{patient_id}/vitals")
+def create_patient_vitals(
+    patient_id: str, payload: CreateVitalsRequest
+) -> dict[str, Any]:
+    client = _service_client()
+    normalized_patient_id = patient_id.strip()
+    appointment_id = (payload.appointment_id or "").strip() or None
+
+    patient_response = (
+        client.table("patient_profiles")
+        .select("id")
+        .eq("id", normalized_patient_id)
+        .limit(1)
+        .execute()
+    )
+    if not patient_response.data:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
+    allowed_sources = {"camera", "app", "device", "manual"}
+    rows = []
+    for vital in payload.vitals:
+        vital_type = vital.vital_type.strip()
+        value = vital.value.strip()
+        source = vital.source.strip().lower()
+        if not vital_type or not value:
+            continue
+        if source not in allowed_sources:
+            raise HTTPException(status_code=422, detail="Invalid vital source.")
+        rows.append(
+            {
+                "patient_id": normalized_patient_id,
+                "appointment_id": appointment_id,
+                "vital_type": vital_type,
+                "value": value,
+                "source": source,
+                "approval_status": "pending",
+            }
+        )
+
+    if not rows:
+        raise HTTPException(status_code=422, detail="At least one vital is required.")
+
+    try:
+        response = client.table("patient_vitals").insert(rows).execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save vitals in Supabase.",
         ) from exc
 
     return {"vitals": response.data or []}

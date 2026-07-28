@@ -1874,6 +1874,9 @@ class _PatientMedicalHistoryScreenState
                     _buildVitalCard(
                         'Blood Pressure', vitals, ['app', 'device']),
                     _buildVitalCard('Heart Rate', vitals, ['app', 'device']),
+                    _buildVitalCard('Oxygen', vitals, ['app', 'device']),
+                    _buildVitalCard(
+                        'Breathing Rate', vitals, ['app', 'device']),
                     _buildVitalCard('Glucose', vitals, ['app', 'device']),
                   ],
                 );

@@ -443,6 +443,24 @@ class BackendApi {
         .toList();
   }
 
+  static Future<List<BackendVital>> createVitals({
+    required String patientId,
+    required String appointmentId,
+    required List<Map<String, String>> vitals,
+  }) async {
+    final data = await _post('/api/patients/$patientId/vitals', {
+      'appointment_id': appointmentId,
+      'vitals': vitals,
+    });
+    if (data is! Map<String, dynamic> || data['vitals'] is! List) {
+      throw BackendApiException('Invalid vitals response.');
+    }
+    return (data['vitals'] as List)
+        .whereType<Map<String, dynamic>>()
+        .map(BackendVital.fromJson)
+        .toList();
+  }
+
   static Future<BackendAppointment> createAppointment({
     required String patientId,
     required String doctorName,

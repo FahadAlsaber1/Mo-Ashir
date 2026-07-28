@@ -948,6 +948,7 @@ class _AppointmentBookingScreenState extends State<AppointmentBookingScreen> {
         notes: _notes.text.trim(),
         ctasLevel: _preliminaryCtasLevel,
       );
+      await _saveVitals(patientId: patientId, appointmentId: appointment.id);
       AppSession.setLatestAppointment(appointment);
       if (!mounted) return;
       setState(() => _step = _confirmedStep);
@@ -962,6 +963,52 @@ class _AppointmentBookingScreenState extends State<AppointmentBookingScreen> {
         setState(() => _savingAppointment = false);
       }
     }
+  }
+
+  Future<void> _saveVitals({
+    required String patientId,
+    required String appointmentId,
+  }) async {
+    final heightWeight = _heightWeightResult;
+    final remoteVitals = _remoteVitalsResult;
+    if (heightWeight == null || remoteVitals == null) return;
+
+    await BackendApi.createVitals(
+      patientId: patientId,
+      appointmentId: appointmentId,
+      vitals: [
+        {
+          'vital_type': 'Height',
+          'value': '${heightWeight.heightCm.toStringAsFixed(1)} cm',
+          'source': 'camera',
+        },
+        {
+          'vital_type': 'Weight',
+          'value': '${heightWeight.weightKg.toStringAsFixed(1)} kg',
+          'source': 'camera',
+        },
+        {
+          'vital_type': 'Heart Rate',
+          'value': '${remoteVitals.heartRateBpm} bpm',
+          'source': 'app',
+        },
+        {
+          'vital_type': 'Blood Pressure',
+          'value': '${remoteVitals.systolic}/${remoteVitals.diastolic} mmHg',
+          'source': 'app',
+        },
+        {
+          'vital_type': 'Oxygen',
+          'value': '${remoteVitals.oxygenPercent}%',
+          'source': 'app',
+        },
+        {
+          'vital_type': 'Breathing Rate',
+          'value': '${remoteVitals.breathingRateRpm} rpm',
+          'source': 'app',
+        },
+      ],
+    );
   }
 
   void _advanceStep() {
