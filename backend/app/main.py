@@ -711,12 +711,32 @@ def seed_demo_doctor() -> dict[str, Any]:
     doctor_response = (
         client.table("doctor_profiles")
         .select("id, full_name, specialty")
-        .eq("full_name", "Dr. Ahmed Mohamed")
+        .eq("full_name", "Khalid")
         .limit(1)
         .execute()
     )
     if not doctor_response.data:
-        raise HTTPException(status_code=404, detail="Demo doctor profile not found.")
+        doctor_response = (
+            client.table("doctor_profiles")
+            .insert(
+                {
+                    "full_name": "Khalid",
+                    "specialty": "General Physician",
+                    "degree": "MBBS, MD",
+                    "years_experience": 10,
+                    "working_start": "09:00 AM",
+                    "working_end": "07:00 PM",
+                    "working_days": ["Mo", "Tu", "We"],
+                    "languages": ["English", "Arabic"],
+                    "certificates": [
+                        "MBBS, MD - Internal Medicine",
+                        "Board Certified - Family Medicine (SCFHS)",
+                        "Advanced Life Support (ACLS)",
+                    ],
+                }
+            )
+            .execute()
+        )
 
     doctor = doctor_response.data[0]
     existing = _find_existing_user(
@@ -727,7 +747,28 @@ def seed_demo_doctor() -> dict[str, Any]:
         national_id="D100000001",
     )
     if existing is not None:
-        return {"created": False, "doctor": doctor, "email": "doctor@example.com"}
+        account_response = (
+            client.table("user_accounts")
+            .update(
+                {
+                    "doctor_id": doctor["id"],
+                    "mobile": "+966500000001",
+                    "national_id": "D100000001",
+                    "password_hash": _hash_password("Doctor123!"),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            .eq("id", existing["id"])
+            .execute()
+        )
+        return {
+            "created": False,
+            "repaired": True,
+            "doctor": doctor,
+            "user": _public_account(account_response.data[0]),
+            "email": "doctor@example.com",
+            "password": "Doctor123!",
+        }
 
     account_response = (
         client.table("user_accounts")
@@ -748,6 +789,7 @@ def seed_demo_doctor() -> dict[str, Any]:
         "doctor": doctor,
         "user": _public_account(account_response.data[0]),
         "email": "doctor@example.com",
+        "password": "Doctor123!",
     }
 
 
