@@ -1,0 +1,43 @@
+name: moashir
+region: fra
+services:
+  - name: web
+    github:
+      repo: FahadAlsaber1/Mo-Ashir
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    source_dir: /
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 6
+    envs:
+      - key: SUPABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: replace-with-your-supabase-url
+      - key: SUPABASE_ANON_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: replace-with-your-supabase-anon-key
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: replace-with-your-supabase-service-role-key
+      - key: OPENAI_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: replace-with-your-openai-api-key
+      - key: OPENAI_BODY_MODEL
+        scope: RUN_TIME
+        type: GENERAL
+        value: gpt-5.6
+alerts:
+  - rule: DEPLOYMENT_FAILED

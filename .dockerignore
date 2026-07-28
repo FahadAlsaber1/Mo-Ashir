@@ -1,0 +1,16 @@
+.git
+.agents
+.dart_tool
+.idea
+.venv
+build
+coverage
+
+.env
+.env.*
+server/.env
+server/.env.*
+
+*.log
+*.pyc
+__pycache__
