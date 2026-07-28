@@ -1877,7 +1877,6 @@ class _PatientMedicalHistoryScreenState
                     _buildVitalCard('Oxygen', vitals, ['app', 'device']),
                     _buildVitalCard(
                         'Breathing Rate', vitals, ['app', 'device']),
-                    _buildVitalCard('Glucose', vitals, ['app', 'device']),
                   ],
                 );
               },
