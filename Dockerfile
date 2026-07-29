@@ -2,13 +2,16 @@ FROM ghcr.io/cirruslabs/flutter:stable AS flutter-build
 
 WORKDIR /app
 
+ARG THERMAL_CAMERA_API_URL=
+
 COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 COPY . .
 RUN flutter build web --release \
     --dart-define=API_BASE_URL= \
-    --dart-define=BODY_ANALYSIS_API_URL=/analyze-body
+    --dart-define=BODY_ANALYSIS_API_URL=/analyze-body \
+    --dart-define=THERMAL_CAMERA_API_URL=$THERMAL_CAMERA_API_URL
 
 FROM python:3.12-slim
 

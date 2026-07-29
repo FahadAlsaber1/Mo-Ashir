@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../data/vital_signs_data.dart';
+import '../services/app_session.dart';
 import '../services/thermal_camera.dart';
 import 'web_vitals_estimator_stub.dart'
     if (dart.library.js_interop) 'web_vitals_estimator_web.dart';
@@ -416,7 +417,10 @@ class _RemoteVitalsMeasurementScreenState
             math.max(0, heartRate - 100) * .03)
         .round()
         .clamp(94, 99);
-    final thermal = await ThermalCamera.captureVerifiedTemperature();
+    final thermal = await ThermalCamera.captureVerifiedTemperature(
+      patientId: AppSession.patientId,
+      patientName: AppSession.fullName,
+    );
 
     await _stopCamera();
     if (!mounted) return;
