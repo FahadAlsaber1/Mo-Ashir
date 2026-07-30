@@ -5,6 +5,7 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:moashir/main.dart';
@@ -14,7 +15,12 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MoashirApp());
 
-    expect(find.text('Hello'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1800));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
     expect(find.text('Sign in with Nafath (نفاذ)'), findsOneWidget);
   });

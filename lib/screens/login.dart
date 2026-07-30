@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const _BrandMark(),
                       const SizedBox(height: 22),
                       const Text(
-                        'Hello',
+                        'Welcome',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.black,
@@ -328,7 +328,7 @@ class _BrandMark extends StatelessWidget {
           borderRadius: BorderRadius.circular(23),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF007F3D).withOpacity(0.16),
+              color: const Color(0xFF007F3D).withValues(alpha: 0.16),
               blurRadius: 28,
               offset: const Offset(0, 12),
             ),
@@ -492,7 +492,7 @@ class _SegmentButton extends StatelessWidget {
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: Colors.black.withValues(alpha: 0.06),
                       blurRadius: 12,
                       offset: const Offset(0, 3),
                     ),
@@ -683,8 +683,8 @@ class _DividerLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: const [
+    return const Row(
+      children: [
         Expanded(child: Divider(color: Color(0xFFD1DED6), height: 1)),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),

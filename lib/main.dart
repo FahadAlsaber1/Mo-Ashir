@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/login.dart';
+import 'screens/splash.dart';
 
 /// The main entry point for the Moashir application.
 void main() => runApp(const MoashirApp());
@@ -40,7 +41,7 @@ class MoashirApp extends StatelessWidget {
       routes: {
         '/login': (_) => const LoginScreen(),
       },
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }
