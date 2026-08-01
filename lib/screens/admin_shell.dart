@@ -53,7 +53,7 @@ class _AdminShellState extends State<AdminShell> {
     final primary = Theme.of(context).colorScheme.primary;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Hospitel'),
+        title: const Text('Hospital'),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -80,7 +80,7 @@ class _AdminShellState extends State<AdminShell> {
           }
           if (snapshot.hasError) {
             return _AdminEmptyState(
-              title: 'Could not load Hospitel dashboard.',
+              title: 'Could not load Hospital dashboard.',
               onRetry: () =>
                   setState(() => _dashboardFuture = _loadDashboard()),
             );
@@ -131,17 +131,26 @@ class _AdminShellState extends State<AdminShell> {
                 for (final review in data.reviews.take(5))
                   _AdminDoctorReviewCard(review: review),
               const SizedBox(height: 24),
-              const _AdminSectionTitle('Doctors with patients'),
+              const _AdminSectionTitle('Doctors'),
               const SizedBox(height: 10),
               if (data.doctors.isEmpty)
                 const _AdminPlainCard('No doctors registered.')
               else
                 for (final doctor in data.doctors)
-                  _AdminDoctorPatientCard(
+                  _AdminDoctorCard(
                     doctor: doctor,
                     appointments:
                         data.appointmentsByDoctor[doctor.id] ?? const [],
-                    patients: data.patients,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => _AdminDoctorPatientsScreen(
+                          doctor: doctor,
+                          appointments:
+                              data.appointmentsByDoctor[doctor.id] ?? const [],
+                          patients: data.patients,
+                        ),
+                      ),
+                    ),
                   ),
             ],
           );
@@ -220,49 +229,6 @@ class _AdminSectionTitle extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-    );
-  }
-}
-
-class _AdminListTile extends StatelessWidget {
-  const _AdminListTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
-                Text(subtitle,
-                    style:
-                        const TextStyle(color: Colors.black54, fontSize: 12)),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -391,8 +357,75 @@ class _AdminReviewTag extends StatelessWidget {
   }
 }
 
-class _AdminDoctorPatientCard extends StatelessWidget {
-  const _AdminDoctorPatientCard({
+class _AdminDoctorCard extends StatelessWidget {
+  const _AdminDoctorCard({
+    required this.doctor,
+    required this.appointments,
+    required this.onTap,
+  });
+
+  final BackendDoctor doctor;
+  final List<BackendAppointment> appointments;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final activeAppointments = appointments
+        .where(
+            (item) => item.status != 'completed' && item.status != 'cancelled')
+        .toList();
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: primary.withValues(alpha: .12),
+              child: Icon(Icons.person_outline, color: primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    doctor.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    '${doctor.specialty} - ${doctor.clinicName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AdminStatusBadge(
+              label: '${activeAppointments.length}',
+              color: primary,
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, color: primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminDoctorPatientsScreen extends StatelessWidget {
+  const _AdminDoctorPatientsScreen({
     required this.doctor,
     required this.appointments,
     required this.patients,
@@ -410,61 +443,68 @@ class _AdminDoctorPatientCard extends StatelessWidget {
             (item) => item.status != 'completed' && item.status != 'cancelled')
         .toList();
     final visibleAppointments = activeAppointments.isEmpty
-        ? appointments.take(3).toList()
+        ? appointments.take(5).toList()
         : activeAppointments;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      appBar: AppBar(title: const Text('Doctor Patients')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: primary.withValues(alpha: .12),
-                child: Icon(Icons.person_outline, color: primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      doctor.fullName,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      '${doctor.specialty} - ${doctor.clinicName}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(color: Colors.black54, fontSize: 12),
-                    ),
-                  ],
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: primary.withValues(alpha: .12),
+                  child: Icon(Icons.person_outline, color: primary),
                 ),
-              ),
-              _AdminStatusBadge(
-                label: '${activeAppointments.length}',
-                color: primary,
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        doctor.fullName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        '${doctor.specialty} - ${doctor.clinicName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _AdminStatusBadge(
+                  label: '${activeAppointments.length}',
+                  color: primary,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
+          const _AdminSectionTitle('Patients'),
+          const SizedBox(height: 10),
           if (visibleAppointments.isEmpty)
-            const Text(
-              'No patients assigned.',
-              style: TextStyle(color: Colors.black54, fontSize: 12),
-            )
+            const _AdminPlainCard('No patients assigned.')
           else
             for (final appointment in visibleAppointments)
               _AdminPatientAppointmentRow(
                 patientName: _patientName(appointment),
                 subtitle: _appointmentSubtitle(appointment),
+                doctorName: doctor.fullName,
                 status: _statusLabel(appointment.status),
                 statusColor: _statusColor(appointment.status, primary),
               ),
@@ -518,12 +558,14 @@ class _AdminPatientAppointmentRow extends StatelessWidget {
   const _AdminPatientAppointmentRow({
     required this.patientName,
     required this.subtitle,
+    required this.doctorName,
     required this.status,
     required this.statusColor,
   });
 
   final String patientName;
   final String subtitle;
+  final String doctorName;
   final String status;
   final Color statusColor;
 
@@ -556,6 +598,12 @@ class _AdminPatientAppointmentRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+                Text(
+                  doctorName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black45, fontSize: 11),
                 ),
               ],
             ),
