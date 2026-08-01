@@ -201,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             if (_role == LoginRole.admin)
                               const Text(
-                                'Ask an existing Hospitel user to create access.',
+                                'Ask an existing Hospital user to create access.',
                                 style: TextStyle(
                                   color: Color(0xFF65756D),
                                   fontSize: 15,
@@ -309,7 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return switch (role) {
       LoginRole.patient => 'Sign in to manage your health',
       LoginRole.doctor => 'Sign in to manage your patients',
-      LoginRole.admin => 'Sign in to manage the Hospitel platform',
+      LoginRole.admin => 'Sign in to manage the Hospital platform',
     };
   }
 }
@@ -366,7 +366,7 @@ class _RoleSelector extends StatelessWidget {
             child: _SegmentButton(
               active: selected == LoginRole.admin,
               icon: Icons.admin_panel_settings_outlined,
-              label: 'Hospitel',
+              label: 'Hospital',
               onTap: () => onChanged(LoginRole.admin),
             ),
           ),
