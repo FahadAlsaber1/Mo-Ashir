@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_session.dart';
 import '../services/backend_api.dart';
 import 'dashboard_wall_frame_stub.dart'
     if (dart.library.js_interop) 'dashboard_wall_frame_web.dart';
 
-class DashboardWall extends StatelessWidget {
+class DashboardWall extends StatefulWidget {
   const DashboardWall({super.key});
 
   static const _background = Color(0xFFE9ECEF);
 
   @override
+  State<DashboardWall> createState() => _DashboardWallState();
+}
+
+class _DashboardWallState extends State<DashboardWall> {
+  int _refreshToken = 0;
+
+  void _refreshEmbeddedPhones() {
+    setState(() => _refreshToken++);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: DashboardWall._background,
       body: MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.noScaling,
@@ -26,7 +38,7 @@ class DashboardWall extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                  child: const Center(
+                  child: Center(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Row(
@@ -35,16 +47,20 @@ class DashboardWall extends StatelessWidget {
                           _PhonePanel(
                             caption: "Logged in as Mo'Ashir doctor",
                             role: 'doctor',
+                            refreshToken: _refreshToken,
+                            onDataChanged: _refreshEmbeddedPhones,
                           ),
-                          SizedBox(width: 34),
+                          const SizedBox(width: 34),
                           _PhonePanel(
                             caption: "Logged in as Mo'Ashir patient",
                             role: 'patient',
+                            refreshToken: _refreshToken,
                           ),
-                          SizedBox(width: 34),
+                          const SizedBox(width: 34),
                           _PhonePanel(
                             caption: "Logged in as Mo'Ashir administrator",
                             role: 'admin',
+                            refreshToken: _refreshToken,
                           ),
                         ],
                       ),
@@ -64,10 +80,14 @@ class _PhonePanel extends StatelessWidget {
   const _PhonePanel({
     required this.caption,
     required this.role,
+    required this.refreshToken,
+    this.onDataChanged,
   });
 
   final String caption;
   final String role;
+  final int refreshToken;
+  final VoidCallback? onDataChanged;
 
   static const _contentSize = Size(430, 932);
   static const _framePadding = 12.0;
@@ -108,8 +128,12 @@ class _PhonePanel extends StatelessWidget {
                 child: SizedBox.fromSize(
                   size: _contentSize,
                   child: role == 'doctor'
-                      ? const _DoctorPhoneApp()
-                      : PhoneAppFrame(role: role),
+                      ? _DoctorPhoneApp(onDataChanged: onDataChanged)
+                      : PhoneAppFrame(
+                          key: ValueKey('$role-$refreshToken'),
+                          role: role,
+                          refreshToken: refreshToken,
+                        ),
                 ),
               ),
             ),
@@ -121,7 +145,9 @@ class _PhonePanel extends StatelessWidget {
 }
 
 class _DoctorPhoneApp extends StatefulWidget {
-  const _DoctorPhoneApp();
+  const _DoctorPhoneApp({this.onDataChanged});
+
+  final VoidCallback? onDataChanged;
 
   @override
   State<_DoctorPhoneApp> createState() => _DoctorPhoneAppState();
@@ -166,6 +192,11 @@ class _DoctorPhoneAppState extends State<_DoctorPhoneApp> {
     }
   }
 
+  void _handleDataChanged() {
+    widget.onDataChanged?.call();
+    setState(() => _future = _load());
+  }
+
   @override
   Widget build(BuildContext context) {
     final historyPatient = _historyPatient;
@@ -196,6 +227,7 @@ class _DoctorPhoneAppState extends State<_DoctorPhoneApp> {
         return _DoctorWallHome(
           data: snapshot.requireData,
           onOpenHistory: (patient) => setState(() => _historyPatient = patient),
+          onDataChanged: _handleDataChanged,
         );
       },
     );
@@ -216,6 +248,7 @@ class _DoctorWallData {
 
 class _DoctorWallPatient {
   const _DoctorWallPatient({
+    required this.appointmentId,
     required this.patientId,
     required this.name,
     required this.initials,
@@ -229,6 +262,7 @@ class _DoctorWallPatient {
     required this.allergies,
   });
 
+  final String appointmentId;
   final String patientId;
   final String name;
   final String initials;
@@ -246,10 +280,12 @@ class _DoctorWallHome extends StatefulWidget {
   const _DoctorWallHome({
     required this.data,
     required this.onOpenHistory,
+    required this.onDataChanged,
   });
 
   final _DoctorWallData data;
   final ValueChanged<_DoctorWallPatient> onOpenHistory;
+  final VoidCallback onDataChanged;
 
   @override
   State<_DoctorWallHome> createState() => _DoctorWallHomeState();
@@ -393,7 +429,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
                 ),
                 const SizedBox(height: 20),
                 _DoctorWallQueuePanel(
-                  patients: patients,
+                  patients: upcoming,
                   startedPatientIds: _startedPatientIds,
                   savingFinish: _savingFinish,
                   onStart: (patient) {
@@ -435,6 +471,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
     final time =
         appointment.timeLabel.isEmpty ? '' : ' - ${appointment.timeLabel}';
     return _DoctorWallPatient(
+      appointmentId: appointment.id,
       patientId: appointment.patientId,
       name: name,
       initials: _initials(name),
@@ -456,6 +493,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
 
   _DoctorWallPatient _patientFromProfile(BackendPatient patient) {
     return _DoctorWallPatient(
+      appointmentId: '',
       patientId: patient.id,
       name: patient.fullName,
       initials: patient.initials,
@@ -489,6 +527,13 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
           dose: plan.prescriptionDose.trim(),
           schedule: plan.prescriptionSchedule.trim(),
           active: true,
+          deliveryStatus: 'out_for_delivery',
+        );
+      }
+      if (patient.appointmentId.isNotEmpty) {
+        await BackendApi.updateAppointmentStatus(
+          appointmentId: patient.appointmentId,
+          status: 'completed',
         );
       }
       if (plan.bookFollowUp && patient.patientId.isNotEmpty) {
@@ -507,8 +552,12 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
         _startedPatientIds.remove(patient.patientId);
         _completionPatient = null;
       });
+      if (AppSession.latestAppointment?.id == patient.appointmentId) {
+        AppSession.latestAppointment = null;
+      }
+      widget.onDataChanged();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session finished.')),
+        const SnackBar(content: Text('Session completed.')),
       );
     } catch (_) {
       if (!mounted) return;
@@ -576,7 +625,7 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
   final _date = TextEditingController(text: 'Next week');
   final _time = TextEditingController(text: '10:30 AM');
   String _deliverySource = 'Hospital';
-  bool _bookFollowUp = true;
+  bool _bookFollowUp = false;
 
   @override
   void dispose() {

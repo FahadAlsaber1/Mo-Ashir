@@ -4,9 +4,11 @@ class PhoneAppFrame extends StatelessWidget {
   const PhoneAppFrame({
     super.key,
     required this.role,
+    required this.refreshToken,
   });
 
   final String role;
+  final int refreshToken;
 
   @override
   Widget build(BuildContext context) {

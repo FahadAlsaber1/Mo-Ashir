@@ -19,11 +19,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<BackendAppointment?> _appointmentFuture;
+  late Future<List<BackendMedication>> _medicationsFuture;
 
   @override
   void initState() {
     super.initState();
     _appointmentFuture = _loadAppointment();
+    _medicationsFuture = _loadMedications();
   }
 
   Future<BackendAppointment?> _loadAppointment() async {
@@ -38,6 +40,12 @@ class _HomeScreenState extends State<HomeScreen> {
       AppSession.setLatestAppointment(appointment);
     }
     return appointment;
+  }
+
+  Future<List<BackendMedication>> _loadMedications() {
+    final patientId = AppSession.patientId;
+    if (patientId == null) return Future.value(const []);
+    return BackendApi.listMedications(patientId: patientId);
   }
 
   @override
@@ -170,6 +178,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 primary, const MedicalHistoryScreen()),
           ],
         ),
+        const SizedBox(height: 24),
+        FutureBuilder<List<BackendMedication>>(
+          future: _medicationsFuture,
+          builder: (context, snapshot) {
+            final medications = snapshot.data ?? const <BackendMedication>[];
+            return MedicationDeliveryMapCard(medications: medications);
+          },
+        ),
       ],
     );
   }
@@ -180,7 +196,10 @@ class _HomeScreenState extends State<HomeScreen> {
             MaterialPageRoute(builder: (_) => const AppointmentBookingScreen()))
         .then((_) {
       if (mounted) {
-        setState(() => _appointmentFuture = _loadAppointment());
+        setState(() {
+          _appointmentFuture = _loadAppointment();
+          _medicationsFuture = _loadMedications();
+        });
       }
     });
   }

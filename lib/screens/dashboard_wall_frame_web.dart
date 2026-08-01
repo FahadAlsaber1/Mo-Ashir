@@ -7,9 +7,11 @@ class PhoneAppFrame extends StatefulWidget {
   const PhoneAppFrame({
     super.key,
     required this.role,
+    required this.refreshToken,
   });
 
   final String role;
+  final int refreshToken;
 
   @override
   State<PhoneAppFrame> createState() => _PhoneAppFrameState();
@@ -30,6 +32,7 @@ class _PhoneAppFrameState extends State<PhoneAppFrame> {
           ...Uri.base.queryParameters,
           'moashirEmbeddedRole': widget.role,
           'moashirFrame': _frameId,
+          'moashirRefresh': widget.refreshToken.toString(),
         },
         fragment: '',
       ).toString();
