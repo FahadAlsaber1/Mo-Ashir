@@ -20,6 +20,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
   ThermalCameraResult? _thermalResult;
   String? _message;
   String? _appointmentLoadError;
+  bool _faceCameraActive = false;
   bool _runningThermal = false;
   bool _saving = false;
 
@@ -61,6 +62,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
         _confirmationCapture = null;
         _confirmationCapturedAt = null;
         _thermalResult = null;
+        _faceCameraActive = false;
         _message =
             'Capture a fresh face confirmation before reading temperature.';
       });
@@ -171,6 +173,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
                         _confirmationCapture = null;
                         _confirmationCapturedAt = null;
                         _thermalResult = null;
+                        _faceCameraActive = false;
                       });
                     },
                   ),
@@ -185,21 +188,57 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
                       style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      height: 470,
-                      child: HeightWeightScannerPage(
-                        key: ValueKey(_selectedAppointment?.id ?? 'station'),
-                        initialLensDirection: CameraLensDirection.front,
-                        embedded: true,
-                        onResult: (result) {
+                    if (!_faceCameraActive)
+                      _CameraOffPanel(
+                        onStart: () {
                           setState(() {
-                            _confirmationCapture = result;
-                            _confirmationCapturedAt = DateTime.now();
-                            _message = 'Face confirmed by body analysis API.';
+                            _faceCameraActive = true;
+                            _confirmationCapture = null;
+                            _confirmationCapturedAt = null;
+                            _thermalResult = null;
+                            _message = 'Camera started for face confirmation.';
                           });
                         },
+                      )
+                    else ...[
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Camera is on for face confirmation.',
+                              style: TextStyle(color: Colors.black54),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _faceCameraActive = false;
+                                _message = 'Camera turned off.';
+                              });
+                            },
+                            icon: const Icon(Icons.videocam_off_outlined),
+                            label: const Text('Turn off'),
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 470,
+                        child: HeightWeightScannerPage(
+                          key: ValueKey(_selectedAppointment?.id ?? 'station'),
+                          initialLensDirection: CameraLensDirection.front,
+                          embedded: true,
+                          onResult: (result) {
+                            setState(() {
+                              _confirmationCapture = result;
+                              _confirmationCapturedAt = DateTime.now();
+                              _faceCameraActive = false;
+                              _message = 'Face confirmed by body analysis API.';
+                            });
+                          },
+                        ),
+                      ),
+                    ],
                     if (_confirmationCapture != null) ...[
                       const SizedBox(height: 12),
                       _StationSuccess(
@@ -264,6 +303,44 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
 
   String _patientName(BackendAppointment appointment) {
     return (appointment.patient?['full_name'] as String?)?.trim() ?? 'Patient';
+  }
+}
+
+class _CameraOffPanel extends StatelessWidget {
+  const _CameraOffPanel({required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7F4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.videocam_off_outlined, color: primary, size: 34),
+          const SizedBox(height: 8),
+          const Text(
+            'Camera is off',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onStart,
+            icon: const Icon(Icons.videocam_outlined),
+            label: const Text('Start face camera'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
