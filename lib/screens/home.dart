@@ -32,9 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<BackendAppointment?> _loadAppointment() async {
-    if (AppSession.latestAppointment != null) {
-      return AppSession.latestAppointment;
-    }
     final patientId = AppSession.patientId;
     if (patientId == null) return null;
     final appointment =
@@ -202,7 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (context, reviewSnapshot) {
                     final reviews =
                         reviewSnapshot.data ?? const <BackendDoctorReview>[];
+                    final reviewsReady = reviewSnapshot.connectionState !=
+                            ConnectionState.waiting &&
+                        !reviewSnapshot.hasError;
                     final showRating = hasDelivery &&
+                        reviewsReady &&
                         !_hasSubmittedReview(appointment, reviews);
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
