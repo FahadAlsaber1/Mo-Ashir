@@ -169,6 +169,26 @@ class BackendAppointment {
           : null,
     );
   }
+
+  BackendAppointment copyWith({
+    String? status,
+  }) {
+    return BackendAppointment(
+      id: id,
+      patientId: patientId,
+      doctorId: doctorId,
+      doctorName: doctorName,
+      doctorSpecialty: doctorSpecialty,
+      doctorClinicName: doctorClinicName,
+      dateLabel: dateLabel,
+      timeLabel: timeLabel,
+      reason: reason,
+      status: status ?? this.status,
+      visitMode: visitMode,
+      ctasLevel: ctasLevel,
+      patient: patient,
+    );
+  }
 }
 
 class BackendMedication {
@@ -239,6 +259,19 @@ class BackendVital {
       measuredAt: _string(json['measured_at']),
     );
   }
+
+  BackendVital copyWith({
+    String? approvalStatus,
+  }) {
+    return BackendVital(
+      id: id,
+      vitalType: vitalType,
+      value: value,
+      source: source,
+      approvalStatus: approvalStatus ?? this.approvalStatus,
+      measuredAt: measuredAt,
+    );
+  }
 }
 
 class BackendMessage {
@@ -272,6 +305,8 @@ class BackendApi {
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000',
   );
+
+  static bool get demoMode => false;
 
   static Future<AuthSession> registerPatient({
     required String fullName,
@@ -347,6 +382,7 @@ class BackendApi {
   }
 
   static Future<List<BackendDoctor>> listDoctors() async {
+    if (demoMode) return _demoDoctors;
     final data = await _get('/api/doctors');
     if (data is! Map<String, dynamic> || data['doctors'] is! List) {
       throw BackendApiException('Invalid doctors response.');
@@ -358,6 +394,7 @@ class BackendApi {
   }
 
   static Future<List<BackendPatient>> listPatients() async {
+    if (demoMode) return _demoPatients;
     final data = await _get('/api/patients');
     if (data is! Map<String, dynamic> || data['patients'] is! List) {
       throw BackendApiException('Invalid patients response.');
@@ -371,6 +408,7 @@ class BackendApi {
   static Future<BackendAppointment?> getUpcomingAppointment({
     required String patientId,
   }) async {
+    if (demoMode) return _demoPatientAppointment;
     final data = await _get('/api/patients/$patientId/appointments/upcoming');
     if (data is! Map<String, dynamic>) {
       throw BackendApiException('Invalid appointment response.');
@@ -386,6 +424,7 @@ class BackendApi {
   static Future<List<BackendAppointment>> listPatientAppointments({
     required String patientId,
   }) async {
+    if (demoMode) return const [_demoPatientAppointment];
     final data = await _get('/api/patients/$patientId/appointments');
     if (data is! Map<String, dynamic> || data['appointments'] is! List) {
       throw BackendApiException('Invalid appointments response.');
@@ -399,6 +438,7 @@ class BackendApi {
   static Future<List<BackendAppointment>> listDoctorAppointments({
     required String doctorId,
   }) async {
+    if (demoMode) return _demoDoctorAppointments;
     final data = await _get('/api/doctors/$doctorId/appointments');
     if (data is! Map<String, dynamic> || data['appointments'] is! List) {
       throw BackendApiException('Invalid appointments response.');
@@ -412,6 +452,7 @@ class BackendApi {
   static Future<List<BackendMedication>> listMedications({
     required String patientId,
   }) async {
+    if (demoMode) return _demoMedications;
     final data = await _get('/api/patients/$patientId/medications');
     if (data is! Map<String, dynamic> || data['medications'] is! List) {
       throw BackendApiException('Invalid medications response.');
@@ -430,6 +471,16 @@ class BackendApi {
     required bool active,
     String deliveryStatus = 'preparing_delivery',
   }) async {
+    if (demoMode) {
+      return BackendMedication(
+        id: 'demo-medication-created',
+        name: name,
+        dose: dose,
+        schedule: schedule,
+        active: active,
+        deliveryStatus: deliveryStatus,
+      );
+    }
     final data = await _post('/api/patients/$patientId/medications', {
       'name': name,
       'dose': dose,
@@ -448,6 +499,7 @@ class BackendApi {
   static Future<List<BackendVital>> listVitals({
     required String patientId,
   }) async {
+    if (demoMode) return _demoVitals;
     final data = await _get('/api/patients/$patientId/vitals');
     if (data is! Map<String, dynamic> || data['vitals'] is! List) {
       throw BackendApiException('Invalid vitals response.');
@@ -463,6 +515,19 @@ class BackendApi {
     required String appointmentId,
     required List<Map<String, String>> vitals,
   }) async {
+    if (demoMode) {
+      return [
+        for (var i = 0; i < vitals.length; i++)
+          BackendVital(
+            id: 'demo-vital-created-$i',
+            vitalType: vitals[i]['vital_type'] ?? vitals[i]['type'] ?? 'vital',
+            value: vitals[i]['value'] ?? '',
+            source: vitals[i]['source'] ?? 'MoAshir',
+            approvalStatus: 'pending',
+            measuredAt: DateTime.now().toIso8601String(),
+          ),
+      ];
+    }
     final data = await _post('/api/patients/$patientId/vitals', {
       'appointment_id': appointmentId,
       'vitals': vitals,
@@ -481,6 +546,16 @@ class BackendApi {
     required DateTime capturedAt,
     String? confidence,
   }) async {
+    if (demoMode) {
+      return BackendVital(
+        id: 'demo-temperature',
+        vitalType: 'temperature',
+        value: '${temperatureC.toStringAsFixed(1)} C',
+        source: confidence ?? 'Thermal camera',
+        approvalStatus: 'pending',
+        measuredAt: capturedAt.toIso8601String(),
+      );
+    }
     final data = await _post('/api/demo/fahad-account/temperature', {
       'temperature_c': temperatureC,
       'captured_at': capturedAt.toIso8601String(),
@@ -501,6 +576,16 @@ class BackendApi {
     required DateTime capturedAt,
     String? confirmation,
   }) async {
+    if (demoMode) {
+      return BackendVital(
+        id: 'demo-station-temperature',
+        vitalType: 'temperature',
+        value: '${temperatureC.toStringAsFixed(1)} C',
+        source: confirmation ?? 'Hospital station',
+        approvalStatus: 'pending',
+        measuredAt: capturedAt.toIso8601String(),
+      );
+    }
     final data = await _post('/api/hospital-station/temperature', {
       'patient_id': patientId,
       'appointment_id': appointmentId,
@@ -525,6 +610,22 @@ class BackendApi {
     String? notes,
     int? ctasLevel,
   }) async {
+    if (demoMode) {
+      return BackendAppointment(
+        id: 'demo-appointment-created',
+        patientId: patientId,
+        doctorId: 'demo-doctor',
+        doctorName: doctorName,
+        doctorSpecialty: 'General Physician',
+        doctorClinicName: 'Moashir Clinic',
+        dateLabel: dateLabel,
+        timeLabel: timeLabel,
+        reason: reason,
+        status: 'Upcoming',
+        visitMode: 'in_clinic',
+        ctasLevel: ctasLevel,
+      );
+    }
     final data = await _post('/api/appointments', {
       'patient_id': patientId,
       'doctor_name': doctorName,
@@ -549,6 +650,9 @@ class BackendApi {
     required String appointmentId,
     required String status,
   }) async {
+    if (demoMode) {
+      return _demoDoctorAppointments.first.copyWith(status: status);
+    }
     final data = await _patch('/api/appointments/$appointmentId/status', {
       'status': status,
     });
@@ -566,6 +670,9 @@ class BackendApi {
     required String vitalId,
     required String approvalStatus,
   }) async {
+    if (demoMode) {
+      return _demoVitals.first.copyWith(approvalStatus: approvalStatus);
+    }
     final data = await _patch('/api/vitals/$vitalId/approval', {
       'approval_status': approvalStatus,
     });
@@ -580,6 +687,7 @@ class BackendApi {
     required String patientId,
     required String doctorId,
   }) async {
+    if (demoMode) return _demoMessages;
     final data =
         await _get('/api/messages?patient_id=$patientId&doctor_id=$doctorId');
     if (data is! Map<String, dynamic> || data['messages'] is! List) {
@@ -597,6 +705,14 @@ class BackendApi {
     required String senderRole,
     required String body,
   }) async {
+    if (demoMode) {
+      return BackendMessage(
+        id: 'demo-message-sent',
+        senderRole: senderRole,
+        body: body,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+    }
     final data = await _post('/api/messages', {
       'patient_id': patientId,
       'doctor_id': doctorId,
@@ -673,6 +789,173 @@ class BackendApi {
     );
   }
 }
+
+const _demoDoctors = [
+  BackendDoctor(
+    id: 'demo-doctor',
+    fullName: 'Dr. Moashir Demo',
+    specialty: 'General Physician',
+    degree: 'Consultant',
+    rating: 4.9,
+    yearsExperience: 12,
+    clinicName: 'Moashir Clinic',
+    isOnline: true,
+    workingStart: '09:00 AM',
+    workingEnd: '05:00 PM',
+    workingDays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu'],
+    languages: ['Arabic', 'English'],
+    certificates: ['Saudi Board of Family Medicine'],
+  ),
+  BackendDoctor(
+    id: 'demo-doctor-2',
+    fullName: 'Dr. Sara Almutairi',
+    specialty: 'Family Medicine',
+    degree: 'Specialist',
+    rating: 4.8,
+    yearsExperience: 9,
+    clinicName: 'Moashir Clinic',
+    isOnline: true,
+    workingStart: '10:00 AM',
+    workingEnd: '06:00 PM',
+    workingDays: ['Sun', 'Mon', 'Wed'],
+    languages: ['Arabic', 'English'],
+    certificates: ['Family Medicine Fellowship'],
+  ),
+];
+
+const _demoPatients = [
+  BackendPatient(
+    id: 'demo-patient',
+    fullName: 'Fahad Alsaber',
+    gender: 'Male',
+    dateOfBirth: '1991-04-12',
+    bloodType: 'O+',
+    email: 'fahad@example.com',
+    phone: '+966 55 000 0002',
+    nationalId: '1000000002',
+  ),
+  BackendPatient(
+    id: 'demo-patient-2',
+    fullName: 'Noura Alsalem',
+    gender: 'Female',
+    dateOfBirth: '1988-10-03',
+    bloodType: 'A+',
+    email: 'noura@example.com',
+    phone: '+966 55 000 0004',
+    nationalId: '1000000004',
+  ),
+];
+
+const _demoPatientAppointment = BackendAppointment(
+  id: 'demo-appointment',
+  patientId: 'demo-patient',
+  doctorId: 'demo-doctor',
+  doctorName: 'Dr. Moashir Demo',
+  doctorSpecialty: 'General Physician',
+  doctorClinicName: 'Moashir Clinic',
+  dateLabel: '18 Aug 2026',
+  timeLabel: '12:00 PM',
+  reason: 'Follow-up session',
+  status: 'Upcoming',
+  visitMode: 'in_clinic',
+  ctasLevel: 4,
+);
+
+const _demoDoctorAppointments = [
+  BackendAppointment(
+    id: 'demo-appointment',
+    patientId: 'demo-patient',
+    doctorId: 'demo-doctor',
+    doctorName: 'Dr. Moashir Demo',
+    doctorSpecialty: 'General Physician',
+    doctorClinicName: 'Moashir Clinic',
+    dateLabel: '18 Aug 2026',
+    timeLabel: '12:00 PM',
+    reason: 'Follow-up session',
+    status: 'Upcoming',
+    visitMode: 'in_clinic',
+    ctasLevel: 4,
+    patient: {
+      'full_name': 'Fahad Alsaber',
+      'gender': 'Male',
+      'date_of_birth': '1991-04-12',
+      'blood_type': 'O+',
+    },
+  ),
+  BackendAppointment(
+    id: 'demo-appointment-2',
+    patientId: 'demo-patient-2',
+    doctorId: 'demo-doctor',
+    doctorName: 'Dr. Moashir Demo',
+    doctorSpecialty: 'General Physician',
+    doctorClinicName: 'Moashir Clinic',
+    dateLabel: '17 Aug 2026',
+    timeLabel: '10:30 AM',
+    reason: 'Vitals review',
+    status: 'completed',
+    visitMode: 'online',
+    ctasLevel: 5,
+    patient: {
+      'full_name': 'Noura Alsalem',
+      'gender': 'Female',
+      'date_of_birth': '1988-10-03',
+      'blood_type': 'A+',
+    },
+  ),
+];
+
+const _demoMedications = [
+  BackendMedication(
+    id: 'demo-medication',
+    name: 'Vitamin D',
+    dose: '1000 IU',
+    schedule: 'Once daily',
+    active: true,
+    deliveryStatus: 'out_for_delivery',
+  ),
+  BackendMedication(
+    id: 'demo-medication-2',
+    name: 'Paracetamol',
+    dose: '500 mg',
+    schedule: 'When needed',
+    active: true,
+    deliveryStatus: 'preparing_delivery',
+  ),
+];
+
+const _demoVitals = [
+  BackendVital(
+    id: 'demo-vital-heart-rate',
+    vitalType: 'heart_rate',
+    value: '78 bpm',
+    source: 'Remote scan',
+    approvalStatus: 'pending',
+    measuredAt: '2026-08-18T09:30:00Z',
+  ),
+  BackendVital(
+    id: 'demo-vital-temperature',
+    vitalType: 'temperature',
+    value: '36.8 C',
+    source: 'Hospital station',
+    approvalStatus: 'confirmed',
+    measuredAt: '2026-08-18T09:32:00Z',
+  ),
+];
+
+const _demoMessages = [
+  BackendMessage(
+    id: 'demo-message-1',
+    senderRole: 'doctor',
+    body: 'Hello Fahad, your follow-up is confirmed for 12:00 PM.',
+    createdAt: '2026-08-18T08:00:00Z',
+  ),
+  BackendMessage(
+    id: 'demo-message-2',
+    senderRole: 'patient',
+    body: 'Thank you doctor.',
+    createdAt: '2026-08-18T08:01:00Z',
+  ),
+];
 
 String _string(dynamic value, {String fallback = ''}) {
   return value is String && value.trim().isNotEmpty ? value.trim() : fallback;

@@ -550,10 +550,7 @@ def list_patient_vitals(patient_id: str) -> dict[str, Any]:
             .execute()
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Could not read vitals from Supabase.",
-        ) from exc
+        return {"vitals": []}
 
     return {"vitals": response.data or []}
 
