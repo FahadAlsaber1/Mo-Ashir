@@ -19,6 +19,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
   ScanResult? _confirmationCapture;
   ThermalCameraResult? _thermalResult;
   String? _message;
+  String? _appointmentLoadError;
   bool _runningThermal = false;
   bool _saving = false;
 
@@ -29,34 +30,24 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
   }
 
   Future<List<BackendAppointment>> _loadAppointments() async {
-    const fahadEmail = 'fahad1@hotmail.com';
-    final patients = await BackendApi.listPatients();
-    BackendPatient? patient;
-    for (final item in patients) {
-      if (item.email.toLowerCase() == fahadEmail) {
-        patient = item;
-        break;
+    try {
+      final appointment = await BackendApi.getLatestAppointment();
+      if (appointment == null) return const [];
+      if (mounted) {
+        _appointmentLoadError = null;
+        _selectedAppointment ??= appointment;
       }
+      return [appointment];
+    } on BackendApiException catch (error) {
+      if (mounted) {
+        _appointmentLoadError = error.message;
+      }
+      return const [];
     }
-    if (patient == null) return const [];
-    final appointments =
-        await BackendApi.listPatientAppointments(patientId: patient.id);
-    final fever = appointments
-        .where((item) => item.reason.toLowerCase().contains('fever'))
-        .toList();
-    final result = fever.isEmpty ? appointments : fever;
-    if (mounted && result.isNotEmpty) {
-      _selectedAppointment ??= result.first;
-    }
-    return result;
   }
 
   Future<void> _runThermalCamera() async {
     final appointment = _selectedAppointment;
-    if (appointment == null) {
-      setState(() => _message = 'Select an appointment first.');
-      return;
-    }
     if (_confirmationCapture == null) {
       setState(
           () => _message = 'Capture the laptop camera confirmation first.');
@@ -69,9 +60,9 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
     });
 
     final patientName =
-        (appointment.patient?['full_name'] as String?)?.trim() ?? 'Patient';
+        (appointment?.patient?['full_name'] as String?)?.trim() ?? 'Patient';
     final thermal = await ThermalCamera.captureVerifiedTemperature(
-      patientId: appointment.patientId,
+      patientId: appointment?.patientId,
       patientName: patientName,
     );
 
@@ -81,24 +72,21 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
       _thermalResult = thermal;
       _message = thermal == null
           ? 'Thermal camera did not return a verified temperature.'
-          : 'Thermal temperature captured.';
+          : 'Thermal temperature captured. Sending to doctor dashboard...';
     });
+    if (thermal != null) {
+      await _saveTemperature(thermal);
+    }
   }
 
-  Future<void> _saveTemperature() async {
-    final appointment = _selectedAppointment;
-    final thermal = _thermalResult;
-    if (appointment == null || thermal == null) return;
-
+  Future<void> _saveTemperature(ThermalCameraResult thermal) async {
     setState(() {
       _saving = true;
       _message = 'Saving station temperature...';
     });
 
     try {
-      await BackendApi.createHospitalStationTemperature(
-        patientId: appointment.patientId,
-        appointmentId: appointment.id,
+      await BackendApi.createLatestAppointmentTemperature(
         temperatureC: thermal.temperatureC,
         capturedAt: thermal.capturedAt,
         confirmation: 'Laptop camera confirmation captured before thermal scan',
@@ -139,8 +127,12 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
               if (snapshot.connectionState == ConnectionState.waiting)
                 const Center(child: CircularProgressIndicator())
               else if (appointments.isEmpty)
-                const _StationCard(
-                  child: Text('No Fahad fever appointment found.'),
+                _StationCard(
+                  child: Text(
+                    _appointmentLoadError == null
+                        ? 'No latest appointment found.'
+                        : 'Could not load latest appointment: $_appointmentLoadError',
+                  ),
                 )
               else
                 _StationCard(
@@ -231,12 +223,10 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _saving ? null : _saveTemperature,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Save to doctor dashboard'),
-                      ),
+                      if (_saving) ...[
+                        const SizedBox(height: 12),
+                        const Center(child: CircularProgressIndicator()),
+                      ],
                     ],
                   ],
                 ),

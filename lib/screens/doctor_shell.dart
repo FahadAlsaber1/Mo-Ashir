@@ -2006,9 +2006,13 @@ class _PatientMedicalHistoryScreenState
   }
 
   bool _isThermalTemperature(BackendVital vital) {
-    return _normalizeVitalName(vital.vitalType) == 'temperature' &&
-        vital.source.toLowerCase() == 'camera' &&
-        vital.value.toLowerCase().contains('thermal');
+    if (_normalizeVitalName(vital.vitalType) != 'temperature') return false;
+    final source = _normalizeVitalName(vital.source);
+    final value = vital.value.toLowerCase();
+    return source == 'camera' ||
+        source == 'thermalcamera' ||
+        source == 'hospitalstation' ||
+        value.contains('thermal');
   }
 
   String _displayVitalTitle(String normalized) {

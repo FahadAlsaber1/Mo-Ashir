@@ -127,6 +127,12 @@ alter table public.appointments
 alter table public.appointments
   add column if not exists time_label text;
 
+alter table public.appointments
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.appointments
+  add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.patient_vitals (
   id uuid primary key default gen_random_uuid(),
   patient_id uuid not null references public.patient_profiles(id) on delete cascade,

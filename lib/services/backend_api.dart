@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -353,6 +354,7 @@ class BackendApi {
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000',
   );
+  static const Duration _requestTimeout = Duration(seconds: 60);
 
   static bool get demoMode => false;
 
@@ -451,6 +453,30 @@ class BackendApi {
         .whereType<Map<String, dynamic>>()
         .map(BackendPatient.fromJson)
         .toList();
+  }
+
+  static Future<BackendPatient> getDefaultPatient() async {
+    if (demoMode) return _demoPatients.first;
+    final data = await _get('/api/patients/default');
+    if (data is! Map<String, dynamic> ||
+        data['patient'] is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid patient response.');
+    }
+    return BackendPatient.fromJson(data['patient'] as Map<String, dynamic>);
+  }
+
+  static Future<BackendAppointment?> getLatestAppointment() async {
+    if (demoMode) return _demoPatientAppointment;
+    final data = await _get('/api/appointments/latest');
+    if (data is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid appointment response.');
+    }
+    final appointment = data['appointment'];
+    if (appointment == null) return null;
+    if (appointment is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid appointment response.');
+    }
+    return BackendAppointment.fromJson(appointment);
   }
 
   static Future<BackendAppointment?> getUpcomingAppointment({
@@ -602,8 +628,8 @@ class BackendApi {
       return BackendVital(
         id: 'demo-temperature',
         vitalType: 'temperature',
-        value: '${temperatureC.toStringAsFixed(1)} C',
-        source: confidence ?? 'Thermal camera',
+        value: '${temperatureC.toStringAsFixed(1)} C from thermal camera',
+        source: 'camera',
         approvalStatus: 'pending',
         measuredAt: capturedAt.toIso8601String(),
       );
@@ -632,8 +658,8 @@ class BackendApi {
       return BackendVital(
         id: 'demo-station-temperature',
         vitalType: 'temperature',
-        value: '${temperatureC.toStringAsFixed(1)} C',
-        source: confirmation ?? 'Hospital station',
+        value: '${temperatureC.toStringAsFixed(1)} C from thermal camera',
+        source: 'camera',
         approvalStatus: 'pending',
         measuredAt: capturedAt.toIso8601String(),
       );
@@ -649,6 +675,36 @@ class BackendApi {
     if (data is! Map<String, dynamic> ||
         data['vital'] is! Map<String, dynamic>) {
       throw BackendApiException('Invalid station temperature response.');
+    }
+    return BackendVital.fromJson(data['vital'] as Map<String, dynamic>);
+  }
+
+  static Future<BackendVital> createLatestAppointmentTemperature({
+    required double temperatureC,
+    required DateTime capturedAt,
+    String? confirmation,
+  }) async {
+    if (demoMode) {
+      return BackendVital(
+        id: 'demo-latest-temperature',
+        vitalType: 'temperature',
+        value: '${temperatureC.toStringAsFixed(1)} C from thermal camera',
+        source: 'camera',
+        approvalStatus: 'pending',
+        measuredAt: capturedAt.toIso8601String(),
+      );
+    }
+    final data = await _post('/api/appointments/latest/temperature', {
+      'temperature_c': temperatureC,
+      'captured_at': capturedAt.toIso8601String(),
+      if (confirmation != null && confirmation.trim().isNotEmpty)
+        'confirmation': confirmation.trim(),
+    });
+    if (data is! Map<String, dynamic> ||
+        data['vital'] is! Map<String, dynamic>) {
+      throw BackendApiException(
+        'Invalid latest appointment temperature response.',
+      );
     }
     return BackendVital.fromJson(data['vital'] as Map<String, dynamic>);
   }
@@ -849,26 +905,46 @@ class BackendApi {
   }
 
   static Future<dynamic> _patch(String path, Map<String, dynamic> body) async {
-    final response = await http.patch(
-      Uri.parse('$baseUrl$path'),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+    return _send(
+      () => http.patch(
+        Uri.parse('$baseUrl$path'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ),
     );
-
-    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final detail = decoded is Map<String, dynamic> ? decoded['detail'] : null;
-      throw BackendApiException(
-        detail is String ? detail : 'Request failed. Please try again.',
-      );
-    }
-
-    return decoded;
   }
 
   static Future<dynamic> _get(String path) async {
-    final response = await http.get(Uri.parse('$baseUrl$path'));
-    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+    return _send(() => http.get(Uri.parse('$baseUrl$path')));
+  }
+
+  static Future<dynamic> _post(String path, Map<String, dynamic> body) async {
+    return _send(
+      () => http.post(
+        Uri.parse('$baseUrl$path'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ),
+    );
+  }
+
+  static Future<dynamic> _send(
+    Future<http.Response> Function() request,
+  ) async {
+    late final http.Response response;
+    try {
+      response = await request().timeout(_requestTimeout);
+    } on TimeoutException catch (error) {
+      throw BackendApiException(
+        'Database save timed out. Check the backend and Supabase connection, then try again.',
+      ) from error;
+    } on http.ClientException catch (error) {
+      throw BackendApiException(
+        'Could not reach the backend server. Check the API URL and network connection.',
+      ) from error;
+    }
+
+    final decoded = _decodeResponse(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final detail = decoded is Map<String, dynamic> ? decoded['detail'] : null;
       throw BackendApiException(
@@ -878,22 +954,13 @@ class BackendApi {
     return decoded;
   }
 
-  static Future<dynamic> _post(String path, Map<String, dynamic> body) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl$path'),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-
-    final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final detail = decoded is Map<String, dynamic> ? decoded['detail'] : null;
-      throw BackendApiException(
-        detail is String ? detail : 'Request failed. Please try again.',
-      );
+  static dynamic _decodeResponse(String body) {
+    if (body.isEmpty) return null;
+    try {
+      return jsonDecode(body);
+    } on FormatException catch (error) {
+      throw BackendApiException('Invalid server response.') from error;
     }
-
-    return decoded;
   }
 
   static AuthSession _authSessionFrom(dynamic data) {
@@ -1040,8 +1107,8 @@ const _demoVitals = [
   BackendVital(
     id: 'demo-vital-temperature',
     vitalType: 'temperature',
-    value: '36.8 C',
-    source: 'Hospital station',
+    value: '36.8 C from thermal camera',
+    source: 'camera',
     approvalStatus: 'confirmed',
     measuredAt: '2026-08-18T09:32:00Z',
   ),

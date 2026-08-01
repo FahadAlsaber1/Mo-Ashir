@@ -138,6 +138,12 @@ class HospitalStationTemperatureRequest(BaseModel):
     confirmation: str | None = None
 
 
+class LatestAppointmentTemperatureRequest(BaseModel):
+    temperature_c: float
+    captured_at: str | None = None
+    confirmation: str | None = None
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     settings = get_settings()
@@ -429,6 +435,31 @@ def list_patients() -> dict[str, Any]:
     return {"patients": response.data or []}
 
 
+@app.get("/api/patients/default")
+def get_default_patient() -> dict[str, Any]:
+    client = _service_client()
+    try:
+        response = (
+            client.table("patient_profiles")
+            .select(
+                "id, full_name, gender, date_of_birth, blood_type, "
+                "email, phone, national_id"
+            )
+            .order("created_at")
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not read patients from Supabase.",
+        ) from exc
+
+    if not response.data:
+        raise HTTPException(status_code=404, detail="No patient profiles found.")
+    return {"patient": response.data[0]}
+
+
 @app.get("/api/patients/{patient_id}/appointments")
 def list_patient_appointments(patient_id: str) -> dict[str, Any]:
     client = _service_client()
@@ -457,6 +488,24 @@ def list_patient_appointments(patient_id: str) -> dict[str, Any]:
             )
         )
     return {"appointments": appointments}
+
+
+@app.get("/api/appointments/latest")
+def get_latest_appointment() -> dict[str, Any]:
+    client = _service_client()
+    appointment = _load_latest_appointment(client)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="No appointments found.")
+
+    patient = _load_patient_by_id(client, appointment["patient_id"])
+    return {
+        "appointment": {
+            **_appointment_payload(
+                appointment, _load_doctor_by_id(client, appointment["doctor_id"])
+            ),
+            "patient": patient,
+        }
+    }
 
 
 @app.get("/api/patients/{patient_id}/medications")
@@ -796,7 +845,7 @@ def create_demo_fahad_account_temperature(
                     "patient_id": patient["id"],
                     "appointment_id": appointment["id"] if appointment else None,
                     "vital_type": "Temperature",
-                    "value": f"{payload.temperature_c:.1f} C",
+                    "value": f"{payload.temperature_c:.1f} C from thermal camera",
                     "source": "camera",
                     "approval_status": "pending",
                     "measured_at": measured_at,
@@ -811,6 +860,65 @@ def create_demo_fahad_account_temperature(
         ) from exc
 
     return {"patient": patient, "appointment": appointment, "vital": response.data[0]}
+
+
+@app.post("/api/appointments/latest/temperature")
+def create_latest_appointment_temperature(
+    payload: LatestAppointmentTemperatureRequest,
+) -> dict[str, Any]:
+    client = _service_client()
+
+    if payload.temperature_c < 30 or payload.temperature_c > 45:
+        raise HTTPException(status_code=422, detail="Invalid temperature.")
+
+    appointment = _load_latest_appointment(client)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="No appointments found.")
+
+    patient = _load_patient_by_id(client, appointment["patient_id"])
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
+    measured_at = _normalized_measured_at(payload.captured_at)
+    try:
+        vital_response = (
+            client.table("patient_vitals")
+            .insert(
+                {
+                    "patient_id": appointment["patient_id"],
+                    "appointment_id": appointment["id"],
+                    "vital_type": "Temperature",
+                    "value": f"{payload.temperature_c:.1f} C from thermal camera",
+                    "source": "camera",
+                    "approval_status": "pending",
+                    "measured_at": measured_at,
+                }
+            )
+            .execute()
+        )
+        client.table("appointments").update(
+            {
+                "status": "checked_in",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).eq("id", appointment["id"]).eq(
+            "patient_id", appointment["patient_id"]
+        ).execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save latest appointment temperature.",
+        ) from exc
+
+    appointment["status"] = "checked_in"
+    return {
+        "patient": patient,
+        "appointment": _appointment_payload(
+            appointment, _load_doctor_by_id(client, appointment["doctor_id"])
+        ),
+        "vital": vital_response.data[0],
+        "status": "checked_in",
+    }
 
 
 @app.post("/api/hospital-station/temperature")
@@ -1497,6 +1605,36 @@ def _load_latest_patient_appointment_by_reason(
     return response.data[0] if response.data else None
 
 
+def _load_latest_appointment(client) -> dict[str, Any] | None:
+    columns = (
+        "id, patient_id, doctor_id, appointment_at, date_label, time_label, "
+        "reason, notes, visit_mode, ctas_level, status"
+    )
+    try:
+        response = (
+            client.table("appointments")
+            .select(f"{columns}, created_at")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        try:
+            response = (
+                client.table("appointments")
+                .select(columns)
+                .order("appointment_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Could not read latest appointment from Supabase.",
+            ) from exc
+    return response.data[0] if response.data else None
+
+
 def _normalized_measured_at(value: str | None) -> str:
     if value and value.strip():
         normalized = value.strip()
@@ -1553,6 +1691,7 @@ def _appointment_payload(
         "visit_mode": appointment.get("visit_mode"),
         "ctas_level": appointment.get("ctas_level"),
         "status": appointment.get("status"),
+        "created_at": appointment.get("created_at"),
     }
 
 

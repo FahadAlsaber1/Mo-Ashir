@@ -236,39 +236,32 @@ Future<void> _seedSession(String role) async {
   }
 
   if (role == 'patient') {
-    final patients = await BackendApi.listPatients();
-    final patient = patients.firstWhere(
-      (item) => item.fullName == 'Fahad Alsaber',
-      orElse: () => patients.first,
-    );
-    AppSession.set(
-      AuthSession(
-        user: {
-          'id': 'embedded-patient-user',
-          'role': 'patient',
-          'patient_id': patient.id,
-          'email': patient.email,
-        },
-        profile: {
-          'id': patient.id,
-          'full_name': patient.fullName,
-          'email': patient.email,
-          'phone': patient.phone,
-          'national_id': patient.nationalId,
-          'gender': patient.gender,
-          'date_of_birth': patient.dateOfBirth,
-          'blood_type': patient.bloodType,
-        },
-      ),
-    );
+    BackendAppointment? appointment;
+    BackendPatient? patient;
     try {
-      final appointment =
-          await BackendApi.getUpcomingAppointment(patientId: patient.id);
-      if (appointment != null) {
-        AppSession.setLatestAppointment(appointment);
+      appointment = await BackendApi.getLatestAppointment();
+      final appointmentPatient = appointment?.patient;
+      if (appointmentPatient != null) {
+        patient = BackendPatient.fromJson(appointmentPatient);
       }
     } on BackendApiException {
-      // Leave the patient home without a cached upcoming appointment.
+      // Fall back to the default patient below.
+    }
+
+    patient ??= await BackendApi.getDefaultPatient();
+    AppSession.set(_embeddedPatientSession(patient));
+    if (appointment != null) {
+      AppSession.setLatestAppointment(appointment);
+    } else {
+      try {
+        final upcoming =
+            await BackendApi.getUpcomingAppointment(patientId: patient.id);
+        if (upcoming != null) {
+          AppSession.setLatestAppointment(upcoming);
+        }
+      } on BackendApiException {
+        // Leave the patient home without a cached appointment.
+      }
     }
     return;
   }
@@ -286,5 +279,26 @@ Future<void> _seedSession(String role) async {
         'email': 'admin@example.com',
       },
     ),
+  );
+}
+
+AuthSession _embeddedPatientSession(BackendPatient patient) {
+  return AuthSession(
+    user: {
+      'id': 'embedded-patient-user',
+      'role': 'patient',
+      'patient_id': patient.id,
+      'email': patient.email,
+    },
+    profile: {
+      'id': patient.id,
+      'full_name': patient.fullName,
+      'email': patient.email,
+      'phone': patient.phone,
+      'national_id': patient.nationalId,
+      'gender': patient.gender,
+      'date_of_birth': patient.dateOfBirth,
+      'blood_type': patient.bloodType,
+    },
   );
 }
