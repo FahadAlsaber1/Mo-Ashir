@@ -227,7 +227,7 @@ class PharmacyScreen extends StatelessWidget {
             _DetailTile(
               label: medication.name,
               value:
-                  '${_value(medication.dose)} - ${_value(medication.schedule)} - ${medication.statusLabel}',
+                  '${_value(medication.dose)} - ${_value(medication.schedule)} - ${medication.deliveryStatusLabel}',
             ),
         ];
       },

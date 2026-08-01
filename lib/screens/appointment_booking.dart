@@ -1006,14 +1006,6 @@ class _AppointmentBookingScreenState extends State<AppointmentBookingScreen> {
       },
     ];
 
-    if (remoteVitals.hasVerifiedTemperature) {
-      vitals.add({
-        'vital_type': 'Temperature',
-        'value': '${remoteVitals.temperatureC!.toStringAsFixed(1)} C',
-        'source': 'camera',
-      });
-    }
-
     await BackendApi.createVitals(
       patientId: patientId,
       appointmentId: appointmentId,

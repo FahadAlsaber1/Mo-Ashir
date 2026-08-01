@@ -1,0 +1,15 @@
+[Unit]
+Description=MO'ASHIR thermal camera bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/moashir/thermal-camera.env
+ExecStart=/opt/moashir/raspberry-pi/start-thermal-camera.sh
+Restart=always
+RestartSec=5
+WorkingDirectory=/opt/moashir
+
+[Install]
+WantedBy=multi-user.target

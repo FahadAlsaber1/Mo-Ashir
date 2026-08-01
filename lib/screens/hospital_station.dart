@@ -1,0 +1,304 @@
+import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
+
+import '../height_weight_scanner/height_weight_scanner_page.dart';
+import '../height_weight_scanner/body_analysis_api.dart';
+import '../services/backend_api.dart';
+import '../services/thermal_camera.dart';
+
+class HospitalStationScreen extends StatefulWidget {
+  const HospitalStationScreen({super.key});
+
+  @override
+  State<HospitalStationScreen> createState() => _HospitalStationScreenState();
+}
+
+class _HospitalStationScreenState extends State<HospitalStationScreen> {
+  late Future<List<BackendAppointment>> _appointmentsFuture;
+  BackendAppointment? _selectedAppointment;
+  ScanResult? _confirmationCapture;
+  ThermalCameraResult? _thermalResult;
+  String? _message;
+  bool _runningThermal = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _appointmentsFuture = _loadAppointments();
+  }
+
+  Future<List<BackendAppointment>> _loadAppointments() async {
+    const fahadEmail = 'fahad1@hotmail.com';
+    final patients = await BackendApi.listPatients();
+    BackendPatient? patient;
+    for (final item in patients) {
+      if (item.email.toLowerCase() == fahadEmail) {
+        patient = item;
+        break;
+      }
+    }
+    if (patient == null) return const [];
+    final appointments =
+        await BackendApi.listPatientAppointments(patientId: patient.id);
+    final fever = appointments
+        .where((item) => item.reason.toLowerCase().contains('fever'))
+        .toList();
+    final result = fever.isEmpty ? appointments : fever;
+    if (mounted && result.isNotEmpty) {
+      _selectedAppointment ??= result.first;
+    }
+    return result;
+  }
+
+  Future<void> _runThermalCamera() async {
+    final appointment = _selectedAppointment;
+    if (appointment == null) {
+      setState(() => _message = 'Select an appointment first.');
+      return;
+    }
+    if (_confirmationCapture == null) {
+      setState(
+          () => _message = 'Capture the laptop camera confirmation first.');
+      return;
+    }
+
+    setState(() {
+      _runningThermal = true;
+      _message = 'Reading thermal camera...';
+    });
+
+    final patientName =
+        (appointment.patient?['full_name'] as String?)?.trim() ?? 'Patient';
+    final thermal = await ThermalCamera.captureVerifiedTemperature(
+      patientId: appointment.patientId,
+      patientName: patientName,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _runningThermal = false;
+      _thermalResult = thermal;
+      _message = thermal == null
+          ? 'Thermal camera did not return a verified temperature.'
+          : 'Thermal temperature captured.';
+    });
+  }
+
+  Future<void> _saveTemperature() async {
+    final appointment = _selectedAppointment;
+    final thermal = _thermalResult;
+    if (appointment == null || thermal == null) return;
+
+    setState(() {
+      _saving = true;
+      _message = 'Saving station temperature...';
+    });
+
+    try {
+      await BackendApi.createHospitalStationTemperature(
+        patientId: appointment.patientId,
+        appointmentId: appointment.id,
+        temperatureC: thermal.temperatureC,
+        capturedAt: thermal.capturedAt,
+        confirmation: 'Laptop camera confirmation captured before thermal scan',
+      );
+      if (!mounted) return;
+      setState(() => _message = 'Temperature saved to doctor dashboard.');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _message = 'Could not save temperature: $error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Hospital Station')),
+      backgroundColor: const Color(0xFFEFFFF5),
+      body: FutureBuilder<List<BackendAppointment>>(
+        future: _appointmentsFuture,
+        builder: (context, snapshot) {
+          final appointments = snapshot.data ?? const <BackendAppointment>[];
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              const Text(
+                'Patient confirmation',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Run this station when the patient enters the hospital.',
+                style: TextStyle(color: Colors.black54),
+              ),
+              const SizedBox(height: 18),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Center(child: CircularProgressIndicator())
+              else if (appointments.isEmpty)
+                const _StationCard(
+                  child: Text('No Fahad fever appointment found.'),
+                )
+              else
+                _StationCard(
+                  child: DropdownButtonFormField<BackendAppointment>(
+                    value: _selectedAppointment,
+                    decoration: const InputDecoration(
+                      labelText: 'Station appointment',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final appointment in appointments)
+                        DropdownMenuItem(
+                          value: appointment,
+                          child: Text(
+                            '${_patientName(appointment)} - ${appointment.reason}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (appointment) {
+                      setState(() {
+                        _selectedAppointment = appointment;
+                        _confirmationCapture = null;
+                        _thermalResult = null;
+                      });
+                    },
+                  ),
+                ),
+              const SizedBox(height: 14),
+              _StationCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Laptop camera confirmation',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 470,
+                      child: HeightWeightScannerPage(
+                        key: ValueKey(_selectedAppointment?.id ?? 'station'),
+                        initialLensDirection: CameraLensDirection.front,
+                        embedded: true,
+                        onResult: (result) {
+                          setState(() {
+                            _confirmationCapture = result;
+                            _message =
+                                'Laptop photo confirmed by body analysis API.';
+                          });
+                        },
+                      ),
+                    ),
+                    if (_confirmationCapture != null) ...[
+                      const SizedBox(height: 12),
+                      _StationSuccess(
+                        text:
+                            'Photo confirmed. Height ${_confirmationCapture!.heightCm.toStringAsFixed(1)} cm, weight ${_confirmationCapture!.weightKg.toStringAsFixed(1)} kg.',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              _StationCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _runningThermal ? null : _runThermalCamera,
+                      icon: _runningThermal
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.thermostat_outlined),
+                      label: const Text('Run thermal camera'),
+                    ),
+                    if (_thermalResult != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '${_thermalResult!.temperatureC.round()} C',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: primary,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : _saveTemperature,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Save to doctor dashboard'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  _message!,
+                  style: TextStyle(
+                    color: primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  String _patientName(BackendAppointment appointment) {
+    return (appointment.patient?['full_name'] as String?)?.trim() ?? 'Patient';
+  }
+}
+
+class _StationCard extends StatelessWidget {
+  const _StationCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _StationSuccess extends StatelessWidget {
+  const _StationSuccess({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: primary, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}

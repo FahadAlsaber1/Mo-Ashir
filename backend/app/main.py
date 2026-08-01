@@ -89,6 +89,7 @@ class CreateMedicationRequest(BaseModel):
     dose: str | None = None
     schedule: str | None = None
     active: bool = True
+    delivery_status: str = "preparing_delivery"
 
 
 class CreateVitalRequest(BaseModel):
@@ -108,6 +109,20 @@ class UpdateAppointmentStatusRequest(BaseModel):
 
 class UpdateVitalApprovalRequest(BaseModel):
     approval_status: str
+
+
+class DemoFahadAccountTemperatureRequest(BaseModel):
+    temperature_c: float
+    captured_at: str | None = None
+    confidence: str | None = None
+
+
+class HospitalStationTemperatureRequest(BaseModel):
+    patient_id: str
+    appointment_id: str | None = None
+    temperature_c: float
+    captured_at: str | None = None
+    confirmation: str | None = None
 
 
 @app.get("/health")
@@ -435,21 +450,34 @@ def list_patient_appointments(patient_id: str) -> dict[str, Any]:
 def list_patient_medications(patient_id: str) -> dict[str, Any]:
     client = _service_client()
     try:
-        response = (
-            client.table("medications")
-            .select("id, name, dose, schedule, active, created_at")
-            .eq("patient_id", patient_id)
-            .eq("active", True)
-            .order("created_at", desc=True)
-            .execute()
-        )
+        try:
+            response = (
+                client.table("medications")
+                .select("id, name, dose, schedule, active, delivery_status, created_at")
+                .eq("patient_id", patient_id)
+                .eq("active", True)
+                .order("created_at", desc=True)
+                .execute()
+            )
+        except Exception:
+            response = (
+                client.table("medications")
+                .select("id, name, dose, schedule, active, created_at")
+                .eq("patient_id", patient_id)
+                .eq("active", True)
+                .order("created_at", desc=True)
+                .execute()
+            )
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="Could not read medications from Supabase.",
         ) from exc
 
-    return {"medications": response.data or []}
+    medications = response.data or []
+    for medication in medications:
+        medication.setdefault("delivery_status", "preparing_delivery")
+    return {"medications": medications}
 
 
 @app.post("/api/patients/{patient_id}/medications")
@@ -458,8 +486,16 @@ def create_patient_medication(
 ) -> dict[str, Any]:
     client = _service_client()
     medication_name = payload.name.strip()
+    delivery_status = payload.delivery_status.strip().lower()
     if not medication_name:
         raise HTTPException(status_code=422, detail="Medication name is required.")
+    if delivery_status not in {
+        "preparing_delivery",
+        "out_for_delivery",
+        "delivered",
+        "cancelled",
+    }:
+        raise HTTPException(status_code=422, detail="Invalid delivery status.")
 
     patient_response = (
         client.table("patient_profiles")
@@ -472,26 +508,31 @@ def create_patient_medication(
         raise HTTPException(status_code=404, detail="Patient not found.")
 
     try:
-        response = (
-            client.table("medications")
-            .insert(
-                {
-                    "patient_id": patient_id.strip(),
-                    "name": medication_name,
-                    "dose": (payload.dose or "").strip() or None,
-                    "schedule": (payload.schedule or "").strip() or None,
-                    "active": payload.active,
-                }
+        row = {
+            "patient_id": patient_id.strip(),
+            "name": medication_name,
+            "dose": (payload.dose or "").strip() or None,
+            "schedule": (payload.schedule or "").strip() or None,
+            "active": payload.active,
+            "delivery_status": delivery_status,
+        }
+        try:
+            response = client.table("medications").insert(row).execute()
+        except Exception:
+            response = (
+                client.table("medications")
+                .insert({key: value for key, value in row.items() if key != "delivery_status"})
+                .execute()
             )
-            .execute()
-        )
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="Could not save medication in Supabase.",
         ) from exc
 
-    return {"medication": response.data[0]}
+    medication = response.data[0]
+    medication.setdefault("delivery_status", delivery_status)
+    return {"medication": medication}
 
 
 @app.get("/api/patients/{patient_id}/vitals")
@@ -568,6 +609,99 @@ def create_patient_vitals(
         ) from exc
 
     return {"vitals": response.data or []}
+
+
+@app.post("/api/demo/fahad-account/temperature")
+def create_demo_fahad_account_temperature(
+    payload: DemoFahadAccountTemperatureRequest,
+) -> dict[str, Any]:
+    client = _service_client()
+    if payload.temperature_c < 30 or payload.temperature_c > 45:
+        raise HTTPException(status_code=422, detail="Invalid temperature.")
+
+    patient = _load_patient_by_account_email(client, "fahad1@hotmail.com")
+    appointment = _load_latest_patient_appointment_by_reason(
+        client,
+        patient_id=patient["id"],
+        reason="fever",
+    )
+    measured_at = _normalized_measured_at(payload.captured_at)
+    try:
+        response = (
+            client.table("patient_vitals")
+            .insert(
+                {
+                    "patient_id": patient["id"],
+                    "appointment_id": appointment["id"] if appointment else None,
+                    "vital_type": "Temperature",
+                    "value": f"{payload.temperature_c:.1f} C",
+                    "source": "camera",
+                    "approval_status": "pending",
+                    "measured_at": measured_at,
+                }
+            )
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save Fahad's temperature.",
+        ) from exc
+
+    return {"patient": patient, "appointment": appointment, "vital": response.data[0]}
+
+
+@app.post("/api/hospital-station/temperature")
+def create_hospital_station_temperature(
+    payload: HospitalStationTemperatureRequest,
+) -> dict[str, Any]:
+    client = _service_client()
+    patient_id = payload.patient_id.strip()
+    appointment_id = (payload.appointment_id or "").strip() or None
+
+    if payload.temperature_c < 30 or payload.temperature_c > 45:
+        raise HTTPException(status_code=422, detail="Invalid temperature.")
+
+    patient = _load_patient_by_id(client, patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
+    if appointment_id is not None:
+        appointment_response = (
+            client.table("appointments")
+            .select("id, patient_id")
+            .eq("id", appointment_id)
+            .eq("patient_id", patient_id)
+            .limit(1)
+            .execute()
+        )
+        if not appointment_response.data:
+            raise HTTPException(status_code=404, detail="Appointment not found.")
+
+    measured_at = _normalized_measured_at(payload.captured_at)
+    try:
+        response = (
+            client.table("patient_vitals")
+            .insert(
+                {
+                    "patient_id": patient_id,
+                    "appointment_id": appointment_id,
+                    "vital_type": "Temperature",
+                    "value": f"{payload.temperature_c:.0f} C",
+                    "source": "camera",
+                    "approval_status": "pending",
+                    "measured_at": measured_at,
+                }
+            )
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save hospital station temperature.",
+        ) from exc
+
+    return {"patient": patient, "vital": response.data[0]}
 
 
 @app.get("/api/patients/{patient_id}/appointments/upcoming")
@@ -1109,6 +1243,53 @@ def _load_patient_by_id(client, patient_id: str) -> dict[str, Any] | None:
         .execute()
     )
     return response.data[0] if response.data else None
+
+
+def _load_patient_by_account_email(client, email: str) -> dict[str, Any]:
+    account_response = (
+        client.table("user_accounts")
+        .select("patient_id")
+        .eq("role", "patient")
+        .eq("email", email)
+        .limit(1)
+        .execute()
+    )
+    if not account_response.data or not account_response.data[0].get("patient_id"):
+        raise HTTPException(status_code=404, detail="Fahad account not found.")
+
+    patient = _load_patient_by_id(client, account_response.data[0]["patient_id"])
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Fahad patient profile not found.")
+    return patient
+
+
+def _load_latest_patient_appointment_by_reason(
+    client, *, patient_id: str, reason: str
+) -> dict[str, Any] | None:
+    response = (
+        client.table("appointments")
+        .select(
+            "id, patient_id, doctor_id, appointment_at, date_label, time_label, "
+            "reason, notes, visit_mode, ctas_level, status"
+        )
+        .eq("patient_id", patient_id)
+        .ilike("reason", f"%{reason}%")
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def _normalized_measured_at(value: str | None) -> str:
+    if value and value.strip():
+        normalized = value.strip()
+        try:
+            datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+            return normalized
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _load_doctor_by_name(client, full_name: str) -> dict[str, Any] | None:

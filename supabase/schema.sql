@@ -147,9 +147,23 @@ create table if not exists public.medications (
   dose text,
   schedule text,
   active boolean not null default true,
+  delivery_status text not null default 'preparing_delivery'
+    check (delivery_status in ('preparing_delivery', 'out_for_delivery', 'delivered', 'cancelled')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.medications
+  add column if not exists delivery_status text not null default 'preparing_delivery';
+
+do $$
+begin
+  alter table public.medications
+    drop constraint if exists medications_delivery_status_check;
+  alter table public.medications
+    add constraint medications_delivery_status_check
+    check (delivery_status in ('preparing_delivery', 'out_for_delivery', 'delivered', 'cancelled'));
+end $$;
 
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),

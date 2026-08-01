@@ -107,7 +107,7 @@ class _MedicineTrackerScreenState extends State<MedicineTrackerScreen> {
                     time: medication.schedule.isEmpty
                         ? 'No schedule'
                         : medication.schedule,
-                    status: medication.statusLabel,
+                    deliveryStatus: medication.deliveryStatusLabel,
                     icon: Icons.medication_outlined,
                     color: primary,
                   ),
@@ -164,7 +164,7 @@ class _MedicineDose extends StatelessWidget {
     required this.name,
     required this.dose,
     required this.time,
-    required this.status,
+    required this.deliveryStatus,
     required this.icon,
     required this.color,
   });
@@ -172,7 +172,7 @@ class _MedicineDose extends StatelessWidget {
   final String name;
   final String dose;
   final String time;
-  final String status;
+  final String deliveryStatus;
   final IconData icon;
   final Color color;
 
@@ -200,9 +200,39 @@ class _MedicineDose extends StatelessWidget {
               ],
             ),
           ),
-          Text(status,
-              style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+          const SizedBox(width: 10),
+          _DeliveryStatusBadge(label: deliveryStatus, color: color),
         ],
+      ),
+    );
+  }
+}
+
+class _DeliveryStatusBadge extends StatelessWidget {
+  const _DeliveryStatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 138),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }

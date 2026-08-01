@@ -1852,7 +1852,7 @@ class _PatientMedicalHistoryScreenState
             ),
             const SizedBox(height: 10),
             const Text(
-              'Temperature is measured from camera only. Height and weight can be reviewed from app/manual entry and camera. Other vitals must come from the app, connected devices, or manual entry.',
+              'Temperature is measured from camera only.',
               style:
                   TextStyle(color: Colors.black54, fontSize: 12, height: 1.35),
             ),
@@ -1867,16 +1867,6 @@ class _PatientMedicalHistoryScreenState
                 return Column(
                   children: [
                     _buildVitalCard('Temperature', vitals, ['camera']),
-                    _buildVitalCard(
-                        'Height', vitals, ['manual', 'app', 'camera']),
-                    _buildVitalCard(
-                        'Weight', vitals, ['manual', 'app', 'camera']),
-                    _buildVitalCard(
-                        'Blood Pressure', vitals, ['app', 'device']),
-                    _buildVitalCard('Heart Rate', vitals, ['app', 'device']),
-                    _buildVitalCard('Oxygen', vitals, ['app', 'device']),
-                    _buildVitalCard(
-                        'Breathing Rate', vitals, ['app', 'device']),
                   ],
                 );
               },
@@ -1935,7 +1925,9 @@ class _PatientMedicalHistoryScreenState
         'device' => 'From device',
         _ => 'From app',
       },
-      value: _displayValue(vital.value),
+      value: _normalizeVitalName(vital.vitalType) == 'temperature'
+          ? _displayTemperatureValue(vital.value)
+          : _displayValue(vital.value),
       icon: switch (source) {
         'camera' => Icons.photo_camera_outlined,
         'manual' => Icons.edit_note_outlined,
@@ -2003,6 +1995,14 @@ class _PatientMedicalHistoryScreenState
 
   String _displayValue(String value) {
     return value.trim().isEmpty ? 'Not recorded' : value.trim();
+  }
+
+  String _displayTemperatureValue(String value) {
+    final match = RegExp(r'[-+]?\d+(?:\.\d+)?').firstMatch(value);
+    if (match == null) return _displayValue(value);
+    final temperature = double.tryParse(match.group(0)!);
+    if (temperature == null) return _displayValue(value);
+    return '${temperature.round()} C';
   }
 }
 
@@ -2140,8 +2140,8 @@ class _HistoryMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     return Container(
-      height: 100,
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -2155,12 +2155,26 @@ class _HistoryMetricCard extends StatelessWidget {
             backgroundColor: primary.withValues(alpha: .14),
             child: Icon(icon, color: primary, size: 18),
           ),
-          const Spacer(),
-          Text(label,
-              style: const TextStyle(color: Colors.black54, fontSize: 12)),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.black54, fontSize: 12),
+          ),
+          const SizedBox(height: 2),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                height: 1.05,
+              ),
+            ),
+          ),
         ],
       ),
     );

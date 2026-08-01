@@ -319,26 +319,11 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          color: const Color(0xFF007F3D),
-          borderRadius: BorderRadius.circular(23),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF007F3D).withValues(alpha: 0.16),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.favorite_border_rounded,
-          color: Colors.white,
-          size: 34,
-        ),
+    return const Center(
+      child: Image(
+        image: AssetImage('assets/images/moashir_badge.png'),
+        width: 150,
+        fit: BoxFit.contain,
       ),
     );
   }

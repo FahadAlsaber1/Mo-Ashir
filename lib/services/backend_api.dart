@@ -178,6 +178,7 @@ class BackendMedication {
     required this.dose,
     required this.schedule,
     required this.active,
+    required this.deliveryStatus,
   });
 
   final String id;
@@ -185,8 +186,18 @@ class BackendMedication {
   final String dose;
   final String schedule;
   final bool active;
+  final String deliveryStatus;
 
   String get statusLabel => active ? 'Active' : 'Inactive';
+
+  String get deliveryStatusLabel {
+    return switch (deliveryStatus) {
+      'out_for_delivery' => 'Out for delivery',
+      'delivered' => 'Delivered',
+      'cancelled' => 'Cancelled',
+      _ => 'Preparing delivery',
+    };
+  }
 
   factory BackendMedication.fromJson(Map<String, dynamic> json) {
     return BackendMedication(
@@ -195,6 +206,8 @@ class BackendMedication {
       dose: _string(json['dose']),
       schedule: _string(json['schedule']),
       active: json['active'] != false,
+      deliveryStatus:
+          _string(json['delivery_status'], fallback: 'preparing_delivery'),
     );
   }
 }
@@ -415,12 +428,14 @@ class BackendApi {
     required String dose,
     required String schedule,
     required bool active,
+    String deliveryStatus = 'preparing_delivery',
   }) async {
     final data = await _post('/api/patients/$patientId/medications', {
       'name': name,
       'dose': dose,
       'schedule': schedule,
       'active': active,
+      'delivery_status': deliveryStatus,
     });
     if (data is! Map<String, dynamic> ||
         data['medication'] is! Map<String, dynamic>) {
@@ -459,6 +474,46 @@ class BackendApi {
         .whereType<Map<String, dynamic>>()
         .map(BackendVital.fromJson)
         .toList();
+  }
+
+  static Future<BackendVital> createFahadTemperature({
+    required double temperatureC,
+    required DateTime capturedAt,
+    String? confidence,
+  }) async {
+    final data = await _post('/api/demo/fahad-account/temperature', {
+      'temperature_c': temperatureC,
+      'captured_at': capturedAt.toIso8601String(),
+      if (confidence != null && confidence.trim().isNotEmpty)
+        'confidence': confidence.trim(),
+    });
+    if (data is! Map<String, dynamic> ||
+        data['vital'] is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid vital response.');
+    }
+    return BackendVital.fromJson(data['vital'] as Map<String, dynamic>);
+  }
+
+  static Future<BackendVital> createHospitalStationTemperature({
+    required String patientId,
+    required String appointmentId,
+    required double temperatureC,
+    required DateTime capturedAt,
+    String? confirmation,
+  }) async {
+    final data = await _post('/api/hospital-station/temperature', {
+      'patient_id': patientId,
+      'appointment_id': appointmentId,
+      'temperature_c': temperatureC,
+      'captured_at': capturedAt.toIso8601String(),
+      if (confirmation != null && confirmation.trim().isNotEmpty)
+        'confirmation': confirmation.trim(),
+    });
+    if (data is! Map<String, dynamic> ||
+        data['vital'] is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid station temperature response.');
+    }
+    return BackendVital.fromJson(data['vital'] as Map<String, dynamic>);
   }
 
   static Future<BackendAppointment> createAppointment({
