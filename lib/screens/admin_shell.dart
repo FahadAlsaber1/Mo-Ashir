@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
 import '../services/backend_api.dart';
-import 'hospital_station.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -100,8 +99,6 @@ class _AdminShellState extends State<AdminShell> {
                 style: TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 20),
-              _AdminStationCard(color: primary),
-              const SizedBox(height: 20),
               Row(
                 children: [
                   Expanded(
@@ -139,57 +136,6 @@ class _AdminShellState extends State<AdminShell> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _AdminStationCard extends StatelessWidget {
-  const _AdminStationCard({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.sensors_outlined, color: color),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Hospital Station',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Run laptop camera confirmation and thermal temperature capture at the entrance.',
-            style: TextStyle(color: Colors.black54),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const HospitalStationScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.play_arrow_outlined),
-            label: const Text('Run station'),
-          ),
-        ],
       ),
     );
   }
