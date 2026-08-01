@@ -258,6 +258,7 @@ class _DoctorWallHome extends StatefulWidget {
 class _DoctorWallHomeState extends State<_DoctorWallHome> {
   final Set<String> _startedPatientIds = <String>{};
   bool _savingFinish = false;
+  _DoctorWallPatient? _completionPatient;
 
   @override
   Widget build(BuildContext context) {
@@ -272,134 +273,157 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
     final nextPatient = upcoming.isEmpty ? null : upcoming.first;
     final primary = Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F4),
-      bottomNavigationBar: const _DoctorWallNav(),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
-          children: [
-            Row(
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: const Color(0xFFF5F7F4),
+          bottomNavigationBar: const _DoctorWallNav(),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
               children: [
-                Expanded(
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Welcome back,',
+                              style: TextStyle(color: Colors.black54)),
+                          const SizedBox(height: 4),
+                          Text(
+                            data.doctor.fullName,
+                            style: TextStyle(
+                              color: primary,
+                              fontSize: 28,
+                              height: 1.05,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.medical_services_outlined,
+                                  size: 15, color: Colors.black54),
+                              const SizedBox(width: 4),
+                              Text(data.doctor.specialty,
+                                  style:
+                                      const TextStyle(color: Colors.black54)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: primary.withValues(alpha: .12),
+                      child: Icon(Icons.notifications_none, color: primary),
+                    ),
+                    const SizedBox(width: 10),
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: primary.withValues(alpha: .12),
+                      child: Text(
+                        _initials(data.doctor.fullName),
+                        style: TextStyle(
+                            color: primary, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: primary,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Welcome back,',
-                          style: TextStyle(color: Colors.black54)),
-                      const SizedBox(height: 4),
+                      const Row(
+                        children: [
+                          Icon(Icons.calendar_today_outlined,
+                              color: Colors.white70, size: 16),
+                          SizedBox(width: 7),
+                          Text('Next Patient',
+                              style: TextStyle(color: Colors.white70)),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
                       Text(
-                        data.doctor.fullName,
-                        style: TextStyle(
-                          color: primary,
-                          fontSize: 28,
-                          height: 1.05,
+                        nextPatient?.name ?? 'No upcoming patient',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.medical_services_outlined,
-                              size: 15, color: Colors.black54),
-                          const SizedBox(width: 4),
-                          Text(data.doctor.specialty,
-                              style: const TextStyle(color: Colors.black54)),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        nextPatient?.reason ?? 'New bookings will appear here.',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 15),
                       ),
+                      const SizedBox(height: 18),
+                      Text(nextPatient?.time ?? '',
+                          style: const TextStyle(color: Colors.white)),
                     ],
                   ),
                 ),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: primary.withValues(alpha: .12),
-                  child: Icon(Icons.notifications_none, color: primary),
-                ),
-                const SizedBox(width: 10),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: primary.withValues(alpha: .12),
-                  child: Text(
-                    _initials(data.doctor.fullName),
-                    style:
-                        TextStyle(color: primary, fontWeight: FontWeight.w900),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: primary,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.calendar_today_outlined,
-                          color: Colors.white70, size: 16),
-                      SizedBox(width: 7),
-                      Text('Next Patient',
-                          style: TextStyle(color: Colors.white70)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    nextPatient?.name ?? 'No upcoming patient',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DoctorWallMetric(
+                        icon: Icons.groups_outlined,
+                        value: '${upcoming.length}',
+                        label: 'Upcoming patients',
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    nextPatient?.reason ?? 'New bookings will appear here.',
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(nextPatient?.time ?? '',
-                      style: const TextStyle(color: Colors.white)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _DoctorWallMetric(
-                    icon: Icons.groups_outlined,
-                    value: '${upcoming.length}',
-                    label: 'Upcoming patients',
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _DoctorWallMetric(
+                        icon: Icons.assignment_outlined,
+                        value: '${previous.length}',
+                        label: 'Previous patients',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _DoctorWallMetric(
-                    icon: Icons.assignment_outlined,
-                    value: '${previous.length}',
-                    label: 'Previous patients',
-                  ),
+                const SizedBox(height: 20),
+                _DoctorWallQueuePanel(
+                  patients: patients,
+                  startedPatientIds: _startedPatientIds,
+                  savingFinish: _savingFinish,
+                  onStart: (patient) {
+                    setState(() => _startedPatientIds.add(patient.patientId));
+                  },
+                  onComplete: _finishSession,
+                  onOpenHistory: widget.onOpenHistory,
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            _DoctorWallQueuePanel(
-              patients: patients,
-              startedPatientIds: _startedPatientIds,
-              savingFinish: _savingFinish,
-              onStart: (patient) {
-                setState(() => _startedPatientIds.add(patient.patientId));
-              },
-              onComplete: _finishSession,
-              onOpenHistory: widget.onOpenHistory,
-            ),
-          ],
+          ),
         ),
-      ),
+        if (_completionPatient != null)
+          Positioned.fill(
+            child: ColoredBox(
+              color: Colors.black.withValues(alpha: .34),
+              child: Center(
+                child: _DoctorWallFinishDialog(
+                  patient: _completionPatient!,
+                  onCancel: () => setState(() => _completionPatient = null),
+                  onSave: (plan) {
+                    final patient = _completionPatient;
+                    if (patient == null) return;
+                    _saveFinishSession(patient, plan);
+                  },
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -448,12 +472,13 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
 
   Future<void> _finishSession(_DoctorWallPatient patient) async {
     if (_savingFinish) return;
-    final plan = await showDialog<_DoctorWallFinishPlan>(
-      context: context,
-      builder: (context) => _DoctorWallFinishDialog(patient: patient),
-    );
-    if (plan == null) return;
+    setState(() => _completionPatient = patient);
+  }
 
+  Future<void> _saveFinishSession(
+    _DoctorWallPatient patient,
+    _DoctorWallFinishPlan plan,
+  ) async {
     setState(() => _savingFinish = true);
     try {
       if (plan.prescriptionName.trim().isNotEmpty &&
@@ -478,7 +503,10 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
         );
       }
       if (!mounted) return;
-      setState(() => _startedPatientIds.remove(patient.patientId));
+      setState(() {
+        _startedPatientIds.remove(patient.patientId);
+        _completionPatient = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Session finished.')),
       );
@@ -525,9 +553,15 @@ class _DoctorWallFinishPlan {
 }
 
 class _DoctorWallFinishDialog extends StatefulWidget {
-  const _DoctorWallFinishDialog({required this.patient});
+  const _DoctorWallFinishDialog({
+    required this.patient,
+    required this.onCancel,
+    required this.onSave,
+  });
 
   final _DoctorWallPatient patient;
+  final VoidCallback onCancel;
+  final ValueChanged<_DoctorWallFinishPlan> onSave;
 
   @override
   State<_DoctorWallFinishDialog> createState() =>
@@ -580,7 +614,7 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
                   ),
                 ),
                 IconButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: widget.onCancel,
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -681,7 +715,7 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: widget.onCancel,
                     child: const Text('Cancel'),
                   ),
                 ),
@@ -689,8 +723,7 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {
-                      Navigator.pop(
-                        context,
+                      widget.onSave(
                         _DoctorWallFinishPlan(
                           bookFollowUp: _bookFollowUp,
                           followUpDate: _date.text,
