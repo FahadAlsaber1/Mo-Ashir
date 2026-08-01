@@ -697,13 +697,20 @@ def create_hospital_station_temperature(
             )
             .execute()
         )
+        if appointment_id is not None:
+            client.table("appointments").update(
+                {
+                    "status": "checked_in",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("id", appointment_id).eq("patient_id", patient_id).execute()
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="Could not save hospital station temperature.",
         ) from exc
 
-    return {"patient": patient, "vital": response.data[0]}
+    return {"patient": patient, "vital": response.data[0], "status": "checked_in"}
 
 
 @app.get("/api/patients/{patient_id}/appointments/upcoming")

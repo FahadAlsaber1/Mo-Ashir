@@ -1711,25 +1711,7 @@ bool _isPatientCheckedIn(List<BackendVital> vitals) {
     return false;
   }
 
-  final recorded = <String>{};
-  var hasCameraTemperature = false;
-  for (final vital in vitals) {
-    final key = _normalizeVitalName(vital.vitalType);
-    if (key == 'temperature') {
-      hasCameraTemperature = _isThermalTemperature(vital);
-    }
-    recorded.add(key);
-  }
-
-  const required = {
-    'height',
-    'weight',
-    'bloodpressure',
-    'heartrate',
-    'oxygen',
-    'breathingrate',
-  };
-  return hasCameraTemperature && required.every(recorded.contains);
+  return vitals.any(_isThermalTemperature);
 }
 
 bool _isThermalTemperature(BackendVital vital) {
