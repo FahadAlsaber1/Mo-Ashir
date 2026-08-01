@@ -536,19 +536,23 @@ def create_patient_medication(
 
 
 @app.get("/api/patients/{patient_id}/vitals")
-def list_patient_vitals(patient_id: str) -> dict[str, Any]:
+def list_patient_vitals(
+    patient_id: str, appointment_id: str | None = None
+) -> dict[str, Any]:
     client = _service_client()
     try:
-        response = (
+        query = (
             client.table("patient_vitals")
             .select(
                 "id, patient_id, appointment_id, vital_type, value, source, "
                 "approval_status, measured_at"
             )
             .eq("patient_id", patient_id)
-            .order("measured_at", desc=True)
-            .execute()
         )
+        normalized_appointment_id = (appointment_id or "").strip()
+        if normalized_appointment_id:
+            query = query.eq("appointment_id", normalized_appointment_id)
+        response = query.order("measured_at", desc=True).execute()
     except Exception as exc:
         return {"vitals": []}
 

@@ -1637,7 +1637,10 @@ class _PatientMedicalHistoryScreenState
 
   Future<List<BackendVital>> _loadVitals() {
     if (widget.patient.patientId.isEmpty) return Future.value(const []);
-    return BackendApi.listVitals(patientId: widget.patient.patientId);
+    return BackendApi.listVitals(
+      patientId: widget.patient.patientId,
+      appointmentId: widget.patient.appointmentId,
+    );
   }
 
   Future<void> _showPrescriptionDialog() async {

@@ -911,7 +911,10 @@ class _DoctorWallHistoryState extends State<_DoctorWallHistory> {
       return const _DoctorWallHistoryData(vitals: [], medications: []);
     }
     final results = await Future.wait([
-      BackendApi.listVitals(patientId: widget.patient.patientId),
+      BackendApi.listVitals(
+        patientId: widget.patient.patientId,
+        appointmentId: widget.patient.appointmentId,
+      ),
       BackendApi.listMedications(patientId: widget.patient.patientId),
     ]);
     return _DoctorWallHistoryData(
@@ -1150,8 +1153,10 @@ class _DoctorWallQueuePanelState extends State<_DoctorWallQueuePanel> {
           return MapEntry(patient.patientId, false);
         }
         try {
-          final vitals =
-              await BackendApi.listVitals(patientId: patient.patientId);
+          final vitals = await BackendApi.listVitals(
+            patientId: patient.patientId,
+            appointmentId: patient.appointmentId,
+          );
           return MapEntry(patient.patientId, _isPatientCheckedIn(vitals));
         } catch (_) {
           return MapEntry(patient.patientId, false);

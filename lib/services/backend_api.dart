@@ -235,6 +235,7 @@ class BackendMedication {
 class BackendVital {
   const BackendVital({
     required this.id,
+    this.appointmentId = '',
     required this.vitalType,
     required this.value,
     required this.source,
@@ -243,6 +244,7 @@ class BackendVital {
   });
 
   final String id;
+  final String appointmentId;
   final String vitalType;
   final String value;
   final String source;
@@ -252,6 +254,7 @@ class BackendVital {
   factory BackendVital.fromJson(Map<String, dynamic> json) {
     return BackendVital(
       id: _string(json['id']),
+      appointmentId: _string(json['appointment_id']),
       vitalType: _string(json['vital_type']),
       value: _string(json['value']),
       source: _string(json['source']),
@@ -265,6 +268,7 @@ class BackendVital {
   }) {
     return BackendVital(
       id: id,
+      appointmentId: appointmentId,
       vitalType: vitalType,
       value: value,
       source: source,
@@ -498,9 +502,13 @@ class BackendApi {
 
   static Future<List<BackendVital>> listVitals({
     required String patientId,
+    String? appointmentId,
   }) async {
     if (demoMode) return _demoVitals;
-    final data = await _get('/api/patients/$patientId/vitals');
+    final path = appointmentId == null || appointmentId.trim().isEmpty
+        ? '/api/patients/$patientId/vitals'
+        : '/api/patients/$patientId/vitals?appointment_id=${Uri.encodeQueryComponent(appointmentId.trim())}';
+    final data = await _get(path);
     if (data is! Map<String, dynamic> || data['vitals'] is! List) {
       throw BackendApiException('Invalid vitals response.');
     }
