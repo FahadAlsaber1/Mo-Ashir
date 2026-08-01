@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
 import '../services/backend_api.dart';
-import 'hospital_station.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -124,8 +123,6 @@ class _AdminShellState extends State<AdminShell> {
                 ],
               ),
               const SizedBox(height: 24),
-              const _AdminStationActionCard(),
-              const SizedBox(height: 24),
               const _AdminSectionTitle('Doctors'),
               const SizedBox(height: 10),
               if (data.doctors.isEmpty)
@@ -179,57 +176,6 @@ class _AdminDashboardData {
   final List<BackendPatient> patients;
   final List<BackendDoctorReview> reviews;
   final Map<String, List<BackendAppointment>> appointmentsByDoctor;
-}
-
-class _AdminStationActionCard extends StatelessWidget {
-  const _AdminStationActionCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.sensors_outlined, color: primary),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Thermal camera station',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Start thermal temperature capture for the selected patient.',
-            style: TextStyle(color: Colors.black54, fontSize: 13),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const HospitalStationScreen(),
-                ),
-              ),
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Start thermal camera'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _AdminMetricCard extends StatelessWidget {
