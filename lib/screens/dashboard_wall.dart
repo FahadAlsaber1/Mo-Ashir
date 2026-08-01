@@ -57,7 +57,7 @@ class _PhonePanel extends StatelessWidget {
   final String caption;
   final String role;
 
-  static const _phoneSize = Size(410, 850);
+  static const _phoneSize = Size(430, 932);
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +78,7 @@ class _PhonePanel extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: Colors.black,
-              borderRadius: BorderRadius.circular(54),
+              borderRadius: BorderRadius.circular(58),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: .24),
@@ -88,9 +88,9 @@ class _PhonePanel extends StatelessWidget {
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(42),
+                borderRadius: BorderRadius.circular(44),
                 child: PhoneAppFrame(role: role),
               ),
             ),

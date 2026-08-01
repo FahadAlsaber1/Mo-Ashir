@@ -17,23 +17,26 @@ class PhoneAppFrame extends StatefulWidget {
 
 class _PhoneAppFrameState extends State<PhoneAppFrame> {
   late final String _viewType;
+  late final String _frameId;
 
   @override
   void initState() {
     super.initState();
-    _viewType =
-        'moashir-phone-${widget.role}-${DateTime.now().microsecondsSinceEpoch}';
+    _frameId = DateTime.now().microsecondsSinceEpoch.toString();
+    _viewType = 'moashir-phone-${widget.role}-$_frameId';
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (_) {
       final source = Uri.base.replace(
         queryParameters: {
           ...Uri.base.queryParameters,
           'moashirEmbeddedRole': widget.role,
+          'moashirFrame': _frameId,
         },
         fragment: '',
       ).toString();
 
       return web.HTMLIFrameElement()
         ..src = source
+        ..loading = 'eager'
         ..style.border = '0'
         ..style.display = 'block'
         ..style.width = '100%'
