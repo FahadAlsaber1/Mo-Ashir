@@ -774,7 +774,7 @@ class _DoctorWallHistoryState extends State<_DoctorWallHistory> {
     final grouped = <String, BackendVital>{};
     for (final vital in vitals) {
       final key = _normalizeVitalName(vital.vitalType);
-      if (key == 'temperature' && vital.source.toLowerCase() != 'camera') {
+      if (key == 'temperature' && !_isThermalTemperature(vital)) {
         continue;
       }
       grouped.putIfAbsent(key, () => vital);
@@ -1409,7 +1409,7 @@ class _DoctorWallVitalCard extends StatelessWidget {
                     Icon(_sourceIcon(vital.source),
                         size: 15, color: Colors.black54),
                     const SizedBox(width: 4),
-                    Text(_sourceLabel(vital.source),
+                    Text(_sourceLabel(vital),
                         style: const TextStyle(
                             color: Colors.black54, fontSize: 11)),
                   ],
@@ -1673,8 +1673,9 @@ String _displayVitalTitle(String value) {
   };
 }
 
-String _sourceLabel(String source) {
-  return switch (source.toLowerCase()) {
+String _sourceLabel(BackendVital vital) {
+  if (_isThermalTemperature(vital)) return 'From thermal camera';
+  return switch (vital.source.toLowerCase()) {
     'camera' => 'From camera',
     'manual' => 'Manual entry',
     'device' => 'From device',
@@ -1715,7 +1716,7 @@ bool _isPatientCheckedIn(List<BackendVital> vitals) {
   for (final vital in vitals) {
     final key = _normalizeVitalName(vital.vitalType);
     if (key == 'temperature') {
-      hasCameraTemperature = vital.source.toLowerCase() == 'camera';
+      hasCameraTemperature = _isThermalTemperature(vital);
     }
     recorded.add(key);
   }
@@ -1729,6 +1730,12 @@ bool _isPatientCheckedIn(List<BackendVital> vitals) {
     'breathingrate',
   };
   return hasCameraTemperature && required.every(recorded.contains);
+}
+
+bool _isThermalTemperature(BackendVital vital) {
+  return _normalizeVitalName(vital.vitalType) == 'temperature' &&
+      vital.source.toLowerCase() == 'camera' &&
+      vital.value.toLowerCase().contains('thermal');
 }
 
 List<String> _allergiesForPatient(String name) {

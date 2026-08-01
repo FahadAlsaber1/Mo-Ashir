@@ -583,10 +583,10 @@ def create_patient_vitals(
             continue
         if source not in allowed_sources:
             raise HTTPException(status_code=422, detail="Invalid vital source.")
-        if _normalize_vital_name(vital_type) == "temperature" and source != "camera":
+        if _normalize_vital_name(vital_type) == "temperature":
             raise HTTPException(
                 status_code=422,
-                detail="Temperature must be captured from the camera.",
+                detail="Temperature must be captured from the thermal camera endpoint.",
             )
         rows.append(
             {
@@ -689,7 +689,7 @@ def create_hospital_station_temperature(
                     "patient_id": patient_id,
                     "appointment_id": appointment_id,
                     "vital_type": "Temperature",
-                    "value": f"{payload.temperature_c:.0f} C",
+                    "value": f"{payload.temperature_c:.1f} C from thermal camera",
                     "source": "camera",
                     "approval_status": "pending",
                     "measured_at": measured_at,

@@ -1881,7 +1881,7 @@ class _PatientMedicalHistoryScreenState
     final grouped = <String, List<BackendVital>>{};
     for (final vital in vitals) {
       final key = _normalizeVitalName(vital.vitalType);
-      if (key == 'temperature' && vital.source.toLowerCase() != 'camera') {
+      if (key == 'temperature' && !_isThermalTemperature(vital)) {
         continue;
       }
       if (key.isEmpty) continue;
@@ -1926,6 +1926,7 @@ class _PatientMedicalHistoryScreenState
     final source = vital.source.toLowerCase();
     return _VitalSource(
       label: switch (source) {
+        'camera' when _isThermalTemperature(vital) => 'From thermal camera',
         'camera' => 'From camera',
         'manual' => 'Manual entry',
         'device' => 'From device',
@@ -1997,6 +1998,12 @@ class _PatientMedicalHistoryScreenState
 
   String _normalizeVitalName(String value) {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  bool _isThermalTemperature(BackendVital vital) {
+    return _normalizeVitalName(vital.vitalType) == 'temperature' &&
+        vital.source.toLowerCase() == 'camera' &&
+        vital.value.toLowerCase().contains('thermal');
   }
 
   String _displayVitalTitle(String normalized) {
