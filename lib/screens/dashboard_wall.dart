@@ -449,6 +449,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
               child: Center(
                 child: _DoctorWallFinishDialog(
                   patient: _completionPatient!,
+                  saving: _savingFinish,
                   onCancel: () => setState(() => _completionPatient = null),
                   onSave: (plan) {
                     final patient = _completionPatient;
@@ -517,6 +518,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
     _DoctorWallPatient patient,
     _DoctorWallFinishPlan plan,
   ) async {
+    if (_savingFinish) return;
     setState(() => _savingFinish = true);
     try {
       if (plan.prescriptionName.trim().isNotEmpty &&
@@ -604,11 +606,13 @@ class _DoctorWallFinishPlan {
 class _DoctorWallFinishDialog extends StatefulWidget {
   const _DoctorWallFinishDialog({
     required this.patient,
+    required this.saving,
     required this.onCancel,
     required this.onSave,
   });
 
   final _DoctorWallPatient patient;
+  final bool saving;
   final VoidCallback onCancel;
   final ValueChanged<_DoctorWallFinishPlan> onSave;
 
@@ -663,7 +667,7 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
                   ),
                 ),
                 IconButton(
-                  onPressed: widget.onCancel,
+                  onPressed: widget.saving ? null : widget.onCancel,
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -683,7 +687,9 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Add follow-up appointment'),
                     value: _bookFollowUp,
-                    onChanged: (value) => setState(() => _bookFollowUp = value),
+                    onChanged: widget.saving
+                        ? null
+                        : (value) => setState(() => _bookFollowUp = value),
                   ),
                   if (_bookFollowUp) ...[
                     _DoctorWallDialogField(
@@ -764,28 +770,36 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: widget.onCancel,
+                    onPressed: widget.saving ? null : widget.onCancel,
                     child: const Text('Cancel'),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () {
-                      widget.onSave(
-                        _DoctorWallFinishPlan(
-                          bookFollowUp: _bookFollowUp,
-                          followUpDate: _date.text,
-                          followUpTime: _time.text,
-                          prescriptionName: _medicine.text,
-                          prescriptionDose: _dose.text,
-                          prescriptionSchedule:
-                              '$_deliverySource - ${_schedule.text}',
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.local_shipping_outlined, size: 16),
-                    label: const Text('Send request'),
+                    onPressed: widget.saving
+                        ? null
+                        : () {
+                            widget.onSave(
+                              _DoctorWallFinishPlan(
+                                bookFollowUp: _bookFollowUp,
+                                followUpDate: _date.text,
+                                followUpTime: _time.text,
+                                prescriptionName: _medicine.text,
+                                prescriptionDose: _dose.text,
+                                prescriptionSchedule:
+                                    '$_deliverySource - ${_schedule.text}',
+                              ),
+                            );
+                          },
+                    icon: widget.saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.local_shipping_outlined, size: 16),
+                    label: Text(widget.saving ? 'Sending...' : 'Send request'),
                   ),
                 ),
               ],

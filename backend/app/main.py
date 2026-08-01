@@ -508,11 +508,64 @@ def create_patient_medication(
         raise HTTPException(status_code=404, detail="Patient not found.")
 
     try:
+        normalized_patient_id = patient_id.strip()
+        dose = (payload.dose or "").strip() or None
+        schedule = (payload.schedule or "").strip() or None
+
+        if payload.active:
+            existing_response = (
+                client.table("medications")
+                .select("id, name, dose, schedule, active, created_at")
+                .eq("patient_id", normalized_patient_id)
+                .eq("name", medication_name)
+                .eq("active", True)
+                .order("created_at", desc=True)
+                .limit(10)
+                .execute()
+            )
+            existing_medication = next(
+                (
+                    item
+                    for item in existing_response.data or []
+                    if (item.get("dose") or "") == (dose or "")
+                ),
+                None,
+            )
+            if existing_medication is not None:
+                updates = {
+                    "schedule": schedule,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "delivery_status": delivery_status,
+                }
+                try:
+                    response = (
+                        client.table("medications")
+                        .update(updates)
+                        .eq("id", existing_medication["id"])
+                        .execute()
+                    )
+                except Exception:
+                    response = (
+                        client.table("medications")
+                        .update(
+                            {
+                                key: value
+                                for key, value in updates.items()
+                                if key != "delivery_status"
+                            }
+                        )
+                        .eq("id", existing_medication["id"])
+                        .execute()
+                    )
+                medication = (response.data or [existing_medication])[0]
+                medication.setdefault("delivery_status", delivery_status)
+                return {"medication": medication}
+
         row = {
-            "patient_id": patient_id.strip(),
+            "patient_id": normalized_patient_id,
             "name": medication_name,
-            "dose": (payload.dose or "").strip() or None,
-            "schedule": (payload.schedule or "").strip() or None,
+            "dose": dose,
+            "schedule": schedule,
             "active": payload.active,
             "delivery_status": delivery_status,
         }
