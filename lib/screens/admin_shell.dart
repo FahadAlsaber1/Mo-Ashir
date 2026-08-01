@@ -512,6 +512,15 @@ class _AdminDoctorPatientsScreen extends StatelessWidget {
                 doctorName: doctor.fullName,
                 status: _statusLabel(appointment.status),
                 statusColor: _statusColor(appointment.status, primary),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => _AdminPatientTimingScreen(
+                      appointment: appointment,
+                      patientName: _patientName(appointment),
+                      doctorName: doctor.fullName,
+                    ),
+                  ),
+                ),
               ),
         ],
       ),
@@ -566,6 +575,7 @@ class _AdminPatientAppointmentRow extends StatelessWidget {
     required this.doctorName,
     required this.status,
     required this.statusColor,
+    required this.onTap,
   });
 
   final String patientName;
@@ -573,48 +583,290 @@ class _AdminPatientAppointmentRow extends StatelessWidget {
   final String doctorName;
   final String status;
   final Color statusColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7F4),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.badge_outlined, color: primary, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    patientName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  Text(
+                    doctorName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.black45, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AdminStatusBadge(label: status, color: statusColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminPatientTimingScreen extends StatefulWidget {
+  const _AdminPatientTimingScreen({
+    required this.appointment,
+    required this.patientName,
+    required this.doctorName,
+  });
+
+  final BackendAppointment appointment;
+  final String patientName;
+  final String doctorName;
+
+  @override
+  State<_AdminPatientTimingScreen> createState() =>
+      _AdminPatientTimingScreenState();
+}
+
+class _AdminPatientTimingScreenState extends State<_AdminPatientTimingScreen> {
+  late Future<List<BackendMedication>> _medicationsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _medicationsFuture = _loadMedications();
+  }
+
+  Future<List<BackendMedication>> _loadMedications() {
+    final patientId = widget.appointment.patientId.trim();
+    if (patientId.isEmpty) return Future.value(const []);
+    return BackendApi.listMedications(patientId: patientId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Patient timing')),
+      body: FutureBuilder<List<BackendMedication>>(
+        future: _medicationsFuture,
+        builder: (context, snapshot) {
+          final medications = snapshot.data ?? const <BackendMedication>[];
+          final pharmacyConfirmedAt = _pharmacyConfirmedAt(medications);
+          final enteredAt = _enteredAt(widget.appointment);
+          final elapsed = enteredAt == null || pharmacyConfirmedAt == null
+              ? null
+              : pharmacyConfirmedAt.difference(enteredAt);
+
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: primary.withValues(alpha: .12),
+                      child: Text(
+                        _initials(widget.patientName),
+                        style: TextStyle(
+                          color: primary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.patientName,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          Text(
+                            widget.doctorName,
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _AdminTimingCard(
+                icon: Icons.login_outlined,
+                title: 'Entered hospital',
+                value: _formatDateTime(enteredAt),
+              ),
+              _AdminTimingCard(
+                icon: Icons.local_pharmacy_outlined,
+                title: 'Pharmacy confirmed',
+                value: _formatDateTime(pharmacyConfirmedAt),
+              ),
+              _AdminTimingCard(
+                icon: Icons.timer_outlined,
+                title: 'Total time',
+                value: elapsed == null
+                    ? 'Not confirmed yet'
+                    : _formatDuration(elapsed),
+                highlight: true,
+              ),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Padding(
+                  padding: EdgeInsets.only(top: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              if (snapshot.hasError)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(
+                    'Could not load pharmacy confirmation.',
+                    style:
+                        TextStyle(color: primary, fontWeight: FontWeight.w800),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  DateTime? _enteredAt(BackendAppointment appointment) {
+    if (appointment.status == 'checked_in' ||
+        appointment.status == 'in_clinic') {
+      return _parseDateTime(appointment.updatedAt) ??
+          _parseDateTime(appointment.createdAt);
+    }
+    return _parseDateTime(appointment.createdAt);
+  }
+
+  DateTime? _pharmacyConfirmedAt(List<BackendMedication> medications) {
+    if (medications.isEmpty) return null;
+    final sorted = [...medications]..sort((a, b) {
+        final aTime =
+            _parseDateTime(a.updatedAt) ?? _parseDateTime(a.createdAt);
+        final bTime =
+            _parseDateTime(b.updatedAt) ?? _parseDateTime(b.createdAt);
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
+    final medication = sorted.first;
+    return _parseDateTime(medication.updatedAt) ??
+        _parseDateTime(medication.createdAt);
+  }
+
+  DateTime? _parseDateTime(String value) {
+    if (value.trim().isEmpty) return null;
+    return DateTime.tryParse(value)?.toLocal();
+  }
+
+  String _formatDateTime(DateTime? value) {
+    if (value == null) return 'Not recorded';
+    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final suffix = value.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $suffix';
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.isNegative) return 'Not available';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    if (hours > 0) return '${hours}h ${minutes}m';
+    return '${duration.inMinutes} min';
+  }
+
+  String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'PT';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+}
+
+class _AdminTimingCard extends StatelessWidget {
+  const _AdminTimingCard({
+    required this.icon,
+    required this.title,
+    required this.value,
+    this.highlight = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F7F4),
-        borderRadius: BorderRadius.circular(14),
+        color: highlight ? primary : Colors.white,
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
-          Icon(Icons.badge_outlined, color: primary, size: 18),
-          const SizedBox(width: 10),
+          Icon(icon, color: highlight ? Colors.white : primary),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  patientName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-                Text(
-                  doctorName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black45, fontSize: 11),
-                ),
-              ],
+            child: Text(
+              title,
+              style: TextStyle(
+                color: highlight ? Colors.white70 : Colors.black54,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-          _AdminStatusBadge(label: status, color: statusColor),
+          Text(
+            value,
+            style: TextStyle(
+              color: highlight ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

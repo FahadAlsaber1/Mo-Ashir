@@ -183,7 +183,7 @@ def list_doctor_appointments(doctor_id: str) -> dict[str, Any]:
             client.table("appointments")
             .select(
                 "id, patient_id, doctor_id, appointment_at, date_label, time_label, "
-                "reason, notes, visit_mode, ctas_level, status"
+                "reason, notes, visit_mode, ctas_level, status, created_at, updated_at"
             )
             .eq("doctor_id", doctor_id)
             .order("created_at", desc=True)
@@ -468,7 +468,7 @@ def list_patient_appointments(patient_id: str) -> dict[str, Any]:
             client.table("appointments")
             .select(
                 "id, doctor_id, appointment_at, date_label, time_label, reason, "
-                "notes, visit_mode, ctas_level, status"
+                "notes, visit_mode, ctas_level, status, created_at, updated_at"
             )
             .eq("patient_id", patient_id)
             .order("created_at", desc=True)
@@ -515,7 +515,10 @@ def list_patient_medications(patient_id: str) -> dict[str, Any]:
         try:
             response = (
                 client.table("medications")
-                .select("id, name, dose, schedule, active, delivery_status, created_at")
+                .select(
+                    "id, name, dose, schedule, active, delivery_status, "
+                    "created_at, updated_at"
+                )
                 .eq("patient_id", patient_id)
                 .eq("active", True)
                 .order("created_at", desc=True)
@@ -524,7 +527,7 @@ def list_patient_medications(patient_id: str) -> dict[str, Any]:
         except Exception:
             response = (
                 client.table("medications")
-                .select("id, name, dose, schedule, active, created_at")
+                .select("id, name, dose, schedule, active, created_at, updated_at")
                 .eq("patient_id", patient_id)
                 .eq("active", True)
                 .order("created_at", desc=True)
@@ -989,7 +992,7 @@ def get_upcoming_appointment(patient_id: str) -> dict[str, Any]:
             client.table("appointments")
             .select(
                 "id, doctor_id, appointment_at, date_label, time_label, reason, "
-                "notes, visit_mode, ctas_level, status"
+                "notes, visit_mode, ctas_level, status, created_at, updated_at"
             )
             .eq("patient_id", patient_id)
             .in_("status", ["scheduled", "checked_in", "in_clinic"])
@@ -1613,7 +1616,7 @@ def _load_latest_appointment(client) -> dict[str, Any] | None:
     try:
         response = (
             client.table("appointments")
-            .select(f"{columns}, created_at")
+                .select(f"{columns}, created_at, updated_at")
             .order("created_at", desc=True)
             .limit(1)
             .execute()
@@ -1692,6 +1695,7 @@ def _appointment_payload(
         "ctas_level": appointment.get("ctas_level"),
         "status": appointment.get("status"),
         "created_at": appointment.get("created_at"),
+        "updated_at": appointment.get("updated_at"),
     }
 
 

@@ -131,6 +131,8 @@ class BackendAppointment {
     required this.reason,
     required this.status,
     required this.visitMode,
+    required this.createdAt,
+    required this.updatedAt,
     this.ctasLevel,
     this.patient,
   });
@@ -146,6 +148,8 @@ class BackendAppointment {
   final String reason;
   final String status;
   final String visitMode;
+  final String createdAt;
+  final String updatedAt;
   final int? ctasLevel;
   final Map<String, dynamic>? patient;
 
@@ -164,6 +168,8 @@ class BackendAppointment {
       reason: _string(json['reason']),
       status: _string(json['status']),
       visitMode: _string(json['visit_mode'], fallback: 'in_clinic'),
+      createdAt: _string(json['created_at']),
+      updatedAt: _string(json['updated_at']),
       ctasLevel: json['ctas_level'] == null ? null : _int(json['ctas_level']),
       patient: json['patient'] is Map<String, dynamic>
           ? json['patient'] as Map<String, dynamic>
@@ -186,6 +192,8 @@ class BackendAppointment {
       reason: reason,
       status: status ?? this.status,
       visitMode: visitMode,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
       ctasLevel: ctasLevel,
       patient: patient,
     );
@@ -200,6 +208,8 @@ class BackendMedication {
     required this.schedule,
     required this.active,
     required this.deliveryStatus,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   final String id;
@@ -208,6 +218,8 @@ class BackendMedication {
   final String schedule;
   final bool active;
   final String deliveryStatus;
+  final String createdAt;
+  final String updatedAt;
 
   String get statusLabel => active ? 'Active' : 'Inactive';
 
@@ -229,6 +241,8 @@ class BackendMedication {
       active: json['active'] != false,
       deliveryStatus:
           _string(json['delivery_status'], fallback: 'preparing_delivery'),
+      createdAt: _string(json['created_at']),
+      updatedAt: _string(json['updated_at']),
     );
   }
 }
@@ -553,6 +567,8 @@ class BackendApi {
         schedule: schedule,
         active: active,
         deliveryStatus: deliveryStatus,
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
       );
     }
     final data = await _post('/api/patients/$patientId/medications', {
@@ -731,6 +747,8 @@ class BackendApi {
         reason: reason,
         status: 'Upcoming',
         visitMode: 'in_clinic',
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
         ctasLevel: ctasLevel,
       );
     }
@@ -1047,6 +1065,8 @@ const _demoPatientAppointment = BackendAppointment(
   reason: 'Follow-up session',
   status: 'Upcoming',
   visitMode: 'in_clinic',
+  createdAt: '2026-08-18T09:00:00Z',
+  updatedAt: '2026-08-18T09:00:00Z',
   ctasLevel: 4,
 );
 
@@ -1063,6 +1083,8 @@ const _demoDoctorAppointments = [
     reason: 'Follow-up session',
     status: 'Upcoming',
     visitMode: 'in_clinic',
+    createdAt: '2026-08-18T09:00:00Z',
+    updatedAt: '2026-08-18T09:00:00Z',
     ctasLevel: 4,
     patient: {
       'full_name': 'Fahad Alsaber',
@@ -1083,6 +1105,8 @@ const _demoDoctorAppointments = [
     reason: 'Vitals review',
     status: 'completed',
     visitMode: 'online',
+    createdAt: '2026-08-17T09:30:00Z',
+    updatedAt: '2026-08-17T10:30:00Z',
     ctasLevel: 5,
     patient: {
       'full_name': 'Noura Alsalem',
