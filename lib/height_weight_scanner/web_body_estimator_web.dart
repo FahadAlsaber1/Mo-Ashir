@@ -10,12 +10,14 @@ class WebBodyCapture {
   const WebBodyCapture({
     required this.photoDataUrl,
     required this.completeBodyLikely,
+    required this.faceLikely,
     required this.message,
     required this.bodyHeightRatio,
   });
 
   final String photoDataUrl;
   final bool completeBodyLikely;
+  final bool faceLikely;
   final String message;
   final double bodyHeightRatio;
 }
@@ -49,6 +51,7 @@ Future<WebBodyCapture?> captureWebBodyPhotoFromCamera(int cameraId) async {
     return WebBodyCapture(
       photoDataUrl: canvas.toDataURL('image/jpeg', 0.86.toJS),
       completeBodyLikely: false,
+      faceLikely: false,
       message: 'Move closer to the camera',
       bodyHeightRatio: 0,
     );
@@ -59,24 +62,28 @@ Future<WebBodyCapture?> captureWebBodyPhotoFromCamera(int cameraId) async {
   final topRatio = box.minY / frameHeight;
   final bottomRatio = box.maxY / frameHeight;
   final coverage = box.pixelCount / (frameWidth * frameHeight);
+  final faceLikely = _faceLikely(data, frameWidth, frameHeight, box);
   final completeBodyLikely = bodyHeightRatio >= .55 &&
       bodyHeightRatio <= .90 &&
       bodyWidthRatio >= .06 &&
       bodyWidthRatio <= .58 &&
       coverage >= .025 &&
       coverage <= .40 &&
+      faceLikely &&
       topRatio > .01 &&
       bottomRatio < .985;
 
   return WebBodyCapture(
     photoDataUrl: canvas.toDataURL('image/jpeg', 0.86.toJS),
     completeBodyLikely: completeBodyLikely,
+    faceLikely: faceLikely,
     message: completeBodyLikely
         ? 'Full body detected'
         : _messageForBox(
             bodyHeightRatio: bodyHeightRatio,
             topRatio: topRatio,
             bottomRatio: bottomRatio,
+            faceLikely: faceLikely,
           ),
     bodyHeightRatio: bodyHeightRatio,
   );
@@ -86,7 +93,9 @@ String _messageForBox({
   required double bodyHeightRatio,
   required double topRatio,
   required double bottomRatio,
+  required bool faceLikely,
 }) {
+  if (!faceLikely) return 'Center your face in the camera';
   if (topRatio <= .01) return 'Make sure the top of your head is visible';
   if (bottomRatio >= .985) return 'Make sure your feet are visible';
   if (bodyHeightRatio > .90) return 'Move farther from the camera';
@@ -170,6 +179,70 @@ _ForegroundBox? _foregroundBox(
     maxY: maxY,
     pixelCount: count * 4,
   );
+}
+
+bool _faceLikely(
+  Uint8ClampedList data,
+  int width,
+  int height,
+  _ForegroundBox box,
+) {
+  final boxWidth = box.width;
+  final boxHeight = box.height;
+  if (boxWidth < width * .05 || boxHeight < height * .18) return false;
+
+  final faceLeft = math.max(0, box.minX + (boxWidth * .18).round());
+  final faceRight = math.min(width - 1, box.maxX - (boxWidth * .18).round());
+  final faceTop = math.max(0, box.minY);
+  final faceBottom = math.min(
+    height - 1,
+    box.minY + math.max(14, (boxHeight * .26).round()),
+  );
+  if (faceRight <= faceLeft || faceBottom <= faceTop) return false;
+
+  var total = 0;
+  var skin = 0;
+  var centerSkin = 0;
+  var centerTotal = 0;
+  var brightEnough = 0;
+  for (var y = faceTop; y <= faceBottom; y += 2) {
+    for (var x = faceLeft; x <= faceRight; x += 2) {
+      final index = (y * width + x) * 4;
+      final red = data[index].toDouble();
+      final green = data[index + 1].toDouble();
+      final blue = data[index + 2].toDouble();
+      final luminance = red * .299 + green * .587 + blue * .114;
+      final maxChannel = math.max(red, math.max(green, blue));
+      final minChannel = math.min(red, math.min(green, blue));
+      final chroma = maxChannel - minChannel;
+      final likelySkin = luminance >= 38 &&
+          luminance <= 235 &&
+          chroma >= 10 &&
+          red >= blue * .82 &&
+          green >= blue * .58 &&
+          red >= green * .70 &&
+          red <= green * 1.85;
+      final center = x > faceLeft + (faceRight - faceLeft) * .25 &&
+          x < faceRight - (faceRight - faceLeft) * .25;
+
+      total++;
+      if (center) centerTotal++;
+      if (luminance >= 38 && luminance <= 235) brightEnough++;
+      if (!likelySkin) continue;
+
+      skin++;
+      if (center) centerSkin++;
+    }
+  }
+
+  if (total == 0 || centerTotal == 0) return false;
+  final skinRatio = skin / total;
+  final centerSkinRatio = centerSkin / centerTotal;
+  final usableLightRatio = brightEnough / total;
+  return skin >= 18 &&
+      skinRatio >= .10 &&
+      centerSkinRatio >= .08 &&
+      usableLightRatio >= .45;
 }
 
 class _Rgb {

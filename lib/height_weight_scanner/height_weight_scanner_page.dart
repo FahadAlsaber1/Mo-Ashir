@@ -292,6 +292,17 @@ class _HeightWeightScannerPageState extends State<HeightWeightScannerPage>
       return;
     }
 
+    if (!capture.faceLikely || !capture.completeBodyLikely) {
+      setState(() {
+        _isWebScanning = false;
+        _measurementState = HeightWeightMeasurementState.failed;
+        _status = capture.faceLikely
+            ? capture.message
+            : 'No face detected. Center your face in the camera and try again.';
+      });
+      return;
+    }
+
     setState(() {
       _measurementState = HeightWeightMeasurementState.validatingImage;
       _status = 'Photo captured. Sending to body analysis API...';
