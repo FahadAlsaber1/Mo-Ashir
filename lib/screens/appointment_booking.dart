@@ -324,7 +324,7 @@ class _AppointmentBookingScreenState extends State<AppointmentBookingScreen> {
         const _Heading('Who is this appointment for?',
             'Choose whether you are booking for yourself or a family member.'),
         _OptionTile(
-          label: 'For me - Noura',
+          label: 'For me - ${AppSession.firstName}',
           icon: Icons.person_outline,
           selected: _appointmentFor == 'Me',
           onTap: () => setState(() {

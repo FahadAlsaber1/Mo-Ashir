@@ -61,7 +61,7 @@ class AppSession {
     final profileName = current?.profile?['full_name'];
     return profileName is String && profileName.trim().isNotEmpty
         ? profileName.trim()
-        : 'Noura Al-Amri';
+        : 'Fahad Alsaber';
   }
 
   static String get firstName {
@@ -78,7 +78,7 @@ class AppSession {
     if (userEmail is String && userEmail.trim().isNotEmpty) {
       return userEmail.trim();
     }
-    return 'noura@example.com';
+    return 'fahad@example.com';
   }
 
   static String get mobile {
