@@ -936,12 +936,12 @@ class BackendApi {
       response = await request().timeout(_requestTimeout);
     } on TimeoutException catch (error) {
       throw BackendApiException(
-        'Database save timed out. Check the backend and Supabase connection, then try again.',
-      ) from error;
+        'Database save timed out. Check the backend and Supabase connection, then try again. $error',
+      );
     } on http.ClientException catch (error) {
       throw BackendApiException(
-        'Could not reach the backend server. Check the API URL and network connection.',
-      ) from error;
+        'Could not reach the backend server. Check the API URL and network connection. $error',
+      );
     }
 
     final decoded = _decodeResponse(response.body);
@@ -959,7 +959,7 @@ class BackendApi {
     try {
       return jsonDecode(body);
     } on FormatException catch (error) {
-      throw BackendApiException('Invalid server response.') from error;
+      throw BackendApiException('Invalid server response. $error');
     }
   }
 
