@@ -376,10 +376,11 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
                         ],
                       ),
                     ),
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: primary.withValues(alpha: .12),
-                      child: Icon(Icons.notifications_none, color: primary),
+                    _DoctorWallNotificationBell(
+                      hasNotification: _checkedInNotificationPatient != null,
+                      onTap: _checkedInNotificationPatient == null
+                          ? null
+                          : _openCheckedInNotification,
                     ),
                     const SizedBox(width: 10),
                     CircleAvatar(
@@ -394,17 +395,15 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
                   ],
                 ),
                 if (_checkedInNotificationPatient != null) ...[
-                  const SizedBox(height: 16),
-                  _DoctorWallCheckInNotification(
-                    patient: _checkedInNotificationPatient!,
-                    onTap: () {
-                      final patient = _checkedInNotificationPatient;
-                      if (patient == null) return;
-                      setState(() => _checkedInNotificationPatient = null);
-                      widget.onOpenHistory(patient);
-                    },
-                    onDismiss: () =>
-                        setState(() => _checkedInNotificationPatient = null),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _DoctorWallCheckInNotification(
+                      patient: _checkedInNotificationPatient!,
+                      onTap: _openCheckedInNotification,
+                      onDismiss: () =>
+                          setState(() => _checkedInNotificationPatient = null),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 24),
@@ -611,6 +610,13 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
     } finally {
       if (mounted) setState(() => _savingFinish = false);
     }
+  }
+
+  void _openCheckedInNotification() {
+    final patient = _checkedInNotificationPatient;
+    if (patient == null) return;
+    setState(() => _checkedInNotificationPatient = null);
+    widget.onOpenHistory(patient);
   }
 
   Future<void> _pollCheckIns({bool notify = true}) async {
@@ -1215,6 +1221,60 @@ class _DoctorWallMetric extends StatelessWidget {
   }
 }
 
+class _DoctorWallNotificationBell extends StatelessWidget {
+  const _DoctorWallNotificationBell({
+    required this.hasNotification,
+    required this.onTap,
+  });
+
+  final bool hasNotification;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Material(
+      color: primary.withValues(alpha: .12),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(
+                child: Icon(
+                  hasNotification
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_none,
+                  color: primary,
+                ),
+              ),
+              if (hasNotification)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE85D04),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DoctorWallCheckInNotification extends StatelessWidget {
   const _DoctorWallCheckInNotification({
     required this.patient,
@@ -1231,24 +1291,27 @@ class _DoctorWallCheckInNotification extends StatelessWidget {
     final primary = Theme.of(context).colorScheme.primary;
     return Material(
       color: primary,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
+      elevation: 8,
+      shadowColor: primary.withValues(alpha: .18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          width: 300,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 18,
+                radius: 16,
                 backgroundColor: Colors.white.withValues(alpha: .18),
                 child: const Icon(
                   Icons.notifications_active_outlined,
                   color: Colors.white,
-                  size: 19,
+                  size: 17,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1274,6 +1337,11 @@ class _DoctorWallCheckInNotification extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onDismiss,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                padding: EdgeInsets.zero,
                 icon: const Icon(Icons.close, color: Colors.white),
               ),
             ],
