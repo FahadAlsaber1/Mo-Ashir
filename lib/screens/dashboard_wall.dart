@@ -242,7 +242,7 @@ class _DoctorWallPatient {
   final List<String> allergies;
 }
 
-class _DoctorWallHome extends StatelessWidget {
+class _DoctorWallHome extends StatefulWidget {
   const _DoctorWallHome({
     required this.data,
     required this.onOpenHistory,
@@ -252,7 +252,16 @@ class _DoctorWallHome extends StatelessWidget {
   final ValueChanged<_DoctorWallPatient> onOpenHistory;
 
   @override
+  State<_DoctorWallHome> createState() => _DoctorWallHomeState();
+}
+
+class _DoctorWallHomeState extends State<_DoctorWallHome> {
+  final Set<String> _startedPatientIds = <String>{};
+  bool _savingFinish = false;
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
     final patients = data.appointments.isNotEmpty
         ? data.appointments.map(_patientFromAppointment).toList()
         : data.fallbackPatients.map(_patientFromProfile).toList();
@@ -378,17 +387,16 @@ class _DoctorWallHome extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            const Text('Patients',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 12),
-            if (patients.isEmpty)
-              const _DoctorWallEmpty('No patients yet.')
-            else
-              for (final patient in patients)
-                _DoctorWallPatientCard(
-                  patient: patient,
-                  onOpenHistory: () => onOpenHistory(patient),
-                ),
+            _DoctorWallQueuePanel(
+              patients: patients,
+              startedPatientIds: _startedPatientIds,
+              savingFinish: _savingFinish,
+              onStart: (patient) {
+                setState(() => _startedPatientIds.add(patient.patientId));
+              },
+              onComplete: _finishSession,
+              onOpenHistory: widget.onOpenHistory,
+            ),
           ],
         ),
       ),
@@ -437,6 +445,52 @@ class _DoctorWallHome extends StatelessWidget {
       allergies: _allergiesForPatient(patient.fullName),
     );
   }
+
+  Future<void> _finishSession(_DoctorWallPatient patient) async {
+    if (_savingFinish) return;
+    final plan = await showDialog<_DoctorWallFinishPlan>(
+      context: context,
+      builder: (context) => _DoctorWallFinishDialog(patient: patient),
+    );
+    if (plan == null) return;
+
+    setState(() => _savingFinish = true);
+    try {
+      if (plan.prescriptionName.trim().isNotEmpty &&
+          patient.patientId.isNotEmpty) {
+        await BackendApi.createMedication(
+          patientId: patient.patientId,
+          name: plan.prescriptionName.trim(),
+          dose: plan.prescriptionDose.trim(),
+          schedule: plan.prescriptionSchedule.trim(),
+          active: true,
+        );
+      }
+      if (plan.bookFollowUp && patient.patientId.isNotEmpty) {
+        await BackendApi.createAppointment(
+          patientId: patient.patientId,
+          doctorName: widget.data.doctor.fullName,
+          dateLabel: plan.followUpDate.trim(),
+          timeLabel: plan.followUpTime.trim(),
+          reason: 'Follow-up consultation',
+          notes: 'Booked by doctor after session.',
+          ctasLevel: _ctasLevel(patient.ctasLabel),
+        );
+      }
+      if (!mounted) return;
+      setState(() => _startedPatientIds.remove(patient.patientId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session finished.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not finish session.')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingFinish = false);
+    }
+  }
 }
 
 class _DoctorWallHistory extends StatefulWidget {
@@ -450,6 +504,150 @@ class _DoctorWallHistory extends StatefulWidget {
 
   @override
   State<_DoctorWallHistory> createState() => _DoctorWallHistoryState();
+}
+
+class _DoctorWallFinishPlan {
+  const _DoctorWallFinishPlan({
+    required this.bookFollowUp,
+    required this.followUpDate,
+    required this.followUpTime,
+    required this.prescriptionName,
+    required this.prescriptionDose,
+    required this.prescriptionSchedule,
+  });
+
+  final bool bookFollowUp;
+  final String followUpDate;
+  final String followUpTime;
+  final String prescriptionName;
+  final String prescriptionDose;
+  final String prescriptionSchedule;
+}
+
+class _DoctorWallFinishDialog extends StatefulWidget {
+  const _DoctorWallFinishDialog({required this.patient});
+
+  final _DoctorWallPatient patient;
+
+  @override
+  State<_DoctorWallFinishDialog> createState() =>
+      _DoctorWallFinishDialogState();
+}
+
+class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
+  final _medicine = TextEditingController(text: 'Paracetamol');
+  final _dose = TextEditingController(text: '500 mg');
+  final _schedule = TextEditingController(text: 'Every 8 hours for 3 days');
+  final _date = TextEditingController(text: 'Next week');
+  final _time = TextEditingController(text: '10:30 AM');
+  bool _bookFollowUp = true;
+
+  @override
+  void dispose() {
+    _medicine.dispose();
+    _dose.dispose();
+    _schedule.dispose();
+    _date.dispose();
+    _time.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Complete ${widget.patient.name}'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Book follow-up'),
+              value: _bookFollowUp,
+              onChanged: (value) => setState(() => _bookFollowUp = value),
+            ),
+            if (_bookFollowUp) ...[
+              _DoctorWallDialogField(
+                controller: _date,
+                label: 'Follow-up date',
+                icon: Icons.calendar_today_outlined,
+              ),
+              _DoctorWallDialogField(
+                controller: _time,
+                label: 'Follow-up time',
+                icon: Icons.schedule_outlined,
+              ),
+            ],
+            const SizedBox(height: 10),
+            _DoctorWallDialogField(
+              controller: _medicine,
+              label: 'Prescription',
+              icon: Icons.medication_outlined,
+            ),
+            _DoctorWallDialogField(
+              controller: _dose,
+              label: 'Dose',
+              icon: Icons.straighten_outlined,
+            ),
+            _DoctorWallDialogField(
+              controller: _schedule,
+              label: 'Schedule',
+              icon: Icons.repeat_outlined,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(
+              context,
+              _DoctorWallFinishPlan(
+                bookFollowUp: _bookFollowUp,
+                followUpDate: _date.text,
+                followUpTime: _time.text,
+                prescriptionName: _medicine.text,
+                prescriptionDose: _dose.text,
+                prescriptionSchedule: _schedule.text,
+              ),
+            );
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DoctorWallDialogField extends StatelessWidget {
+  const _DoctorWallDialogField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+    );
+  }
 }
 
 class _DoctorWallHistoryState extends State<_DoctorWallHistory> {
@@ -656,92 +854,247 @@ class _DoctorWallMetric extends StatelessWidget {
   }
 }
 
-class _DoctorWallPatientCard extends StatelessWidget {
-  const _DoctorWallPatientCard({
-    required this.patient,
+class _DoctorWallQueuePanel extends StatefulWidget {
+  const _DoctorWallQueuePanel({
+    required this.patients,
+    required this.startedPatientIds,
+    required this.savingFinish,
+    required this.onStart,
+    required this.onComplete,
     required this.onOpenHistory,
   });
 
-  final _DoctorWallPatient patient;
-  final VoidCallback onOpenHistory;
+  final List<_DoctorWallPatient> patients;
+  final Set<String> startedPatientIds;
+  final bool savingFinish;
+  final ValueChanged<_DoctorWallPatient> onStart;
+  final ValueChanged<_DoctorWallPatient> onComplete;
+  final ValueChanged<_DoctorWallPatient> onOpenHistory;
+
+  @override
+  State<_DoctorWallQueuePanel> createState() => _DoctorWallQueuePanelState();
+}
+
+class _DoctorWallQueuePanelState extends State<_DoctorWallQueuePanel> {
+  late Future<Map<String, bool>> _checkedFuture = _loadCheckedStates();
+
+  @override
+  void didUpdateWidget(covariant _DoctorWallQueuePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldIds =
+        oldWidget.patients.map((patient) => patient.patientId).join('|');
+    final newIds =
+        widget.patients.map((patient) => patient.patientId).join('|');
+    if (oldIds != newIds) {
+      _checkedFuture = _loadCheckedStates();
+    }
+  }
+
+  Future<Map<String, bool>> _loadCheckedStates() async {
+    final entries = await Future.wait(
+      widget.patients.map((patient) async {
+        if (patient.patientId.isEmpty) {
+          return MapEntry(patient.patientId, false);
+        }
+        try {
+          final vitals =
+              await BackendApi.listVitals(patientId: patient.patientId);
+          return MapEntry(patient.patientId, _isPatientCheckedIn(vitals));
+        } catch (_) {
+          return MapEntry(patient.patientId, false);
+        }
+      }),
+    );
+    return Map<String, bool>.fromEntries(entries);
+  }
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final upcoming = patient.status == 'Upcoming';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Patient Queue Management',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900)),
+                    SizedBox(height: 3),
+                    Text('CTAS, check-in, and visit actions',
+                        style: TextStyle(color: Colors.black54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: widget.patients.isEmpty ? null : () {},
+                icon: const Icon(Icons.phone_in_talk_outlined, size: 16),
+                label: const Text('Call Next'),
+                style: FilledButton.styleFrom(backgroundColor: primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          FutureBuilder<Map<String, bool>>(
+            future: _checkedFuture,
+            builder: (context, snapshot) {
+              final checkedStates = snapshot.data ?? const <String, bool>{};
+              if (widget.patients.isEmpty) {
+                return const _DoctorWallEmpty('No patients yet.');
+              }
+              return Column(
+                children: [
+                  for (var index = 0; index < widget.patients.length; index++)
+                    _DoctorWallQueueRow(
+                      queueNumber: 'A${13 + index}',
+                      patient: widget.patients[index],
+                      checkedIn:
+                          checkedStates[widget.patients[index].patientId] ??
+                              false,
+                      started: widget.startedPatientIds
+                          .contains(widget.patients[index].patientId),
+                      savingFinish: widget.savingFinish,
+                      onStart: () => widget.onStart(widget.patients[index]),
+                      onComplete: () =>
+                          widget.onComplete(widget.patients[index]),
+                      onOpenHistory: () =>
+                          widget.onOpenHistory(widget.patients[index]),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DoctorWallQueueRow extends StatelessWidget {
+  const _DoctorWallQueueRow({
+    required this.queueNumber,
+    required this.patient,
+    required this.checkedIn,
+    required this.started,
+    required this.savingFinish,
+    required this.onStart,
+    required this.onComplete,
+    required this.onOpenHistory,
+  });
+
+  final String queueNumber;
+  final _DoctorWallPatient patient;
+  final bool checkedIn;
+  final bool started;
+  final bool savingFinish;
+  final VoidCallback onStart;
+  final VoidCallback onComplete;
+  final VoidCallback onOpenHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD8E8DE)),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
         children: [
           Row(
             children: [
               CircleAvatar(
-                radius: 25,
+                radius: 22,
                 backgroundColor: const Color(0xFFD4F5DE),
-                child: Text(patient.initials,
+                child: Text(queueNumber,
                     style:
                         TextStyle(color: primary, fontWeight: FontWeight.w900)),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(patient.name,
                         style: const TextStyle(fontWeight: FontWeight.w900)),
-                    Text(patient.reason,
-                        style: TextStyle(
-                            color: primary, fontWeight: FontWeight.w800)),
-                    Text(patient.time,
+                    Text('${patient.reason} - ${patient.time}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.black45, fontSize: 12)),
+                            color: Colors.black54, fontSize: 12)),
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _DoctorWallPatientInfoChip(
-                    icon: Icons.priority_high_rounded,
-                    label: patient.ctasLabel,
-                    color: _ctasColor(patient.ctasLabel),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: upcoming
-                          ? const Color(0xFFD4F5DE)
-                          : const Color(0xFFE9F1EC),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Text(
-                      patient.status,
-                      style: TextStyle(
-                        color: upcoming ? primary : Colors.black54,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
+              _DoctorWallPatientInfoChip(
+                icon: Icons.priority_high_rounded,
+                label: patient.ctasLabel,
+                color: _ctasColor(patient.ctasLabel),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _DoctorWallCheckBadge(checkedIn: checkedIn),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 34,
+                child: FilledButton.icon(
+                  onPressed: started ? null : onStart,
+                  icon: const Icon(Icons.play_arrow_rounded, size: 15),
+                  label: const Text('Start'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4F5DE),
+                    foregroundColor: primary,
+                    disabledBackgroundColor: const Color(0xFFEAF2ED),
+                    disabledForegroundColor: Colors.black38,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    textStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 34,
+                child: FilledButton.icon(
+                  onPressed: !started || savingFinish ? null : onComplete,
+                  icon: const Icon(Icons.check_circle_outline, size: 15),
+                  label: const Text('Complete'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFEAF2ED),
+                    disabledForegroundColor: Colors.black38,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    textStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
-            height: 42,
+            height: 38,
             child: FilledButton.icon(
               onPressed: onOpenHistory,
-              icon: const Icon(Icons.assignment_outlined, size: 16),
+              icon: const Icon(Icons.assignment_outlined, size: 15),
               label: const Text('Medical History'),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFD4F5DE),
@@ -750,6 +1103,35 @@ class _DoctorWallPatientCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DoctorWallCheckBadge extends StatelessWidget {
+  const _DoctorWallCheckBadge({required this.checkedIn});
+
+  final bool checkedIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = checkedIn ? const Color(0xFF0B6B39) : const Color(0xFF946200);
+    return Container(
+      height: 34,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: .28)),
+      ),
+      child: Text(
+        checkedIn ? 'Checked In' : 'Not checked yet',
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -1317,6 +1699,36 @@ Color _ctasColor(String ctasLabel) {
     4 => const Color(0xFF006D9C),
     _ => const Color(0xFF0B6B39),
   };
+}
+
+int? _ctasLevel(String ctasLabel) {
+  return int.tryParse(ctasLabel.replaceAll(RegExp(r'[^0-9]'), ''));
+}
+
+bool _isPatientCheckedIn(List<BackendVital> vitals) {
+  if (vitals.any((vital) => vital.approvalStatus == 'retake_requested')) {
+    return false;
+  }
+
+  final recorded = <String>{};
+  var hasCameraTemperature = false;
+  for (final vital in vitals) {
+    final key = _normalizeVitalName(vital.vitalType);
+    if (key == 'temperature') {
+      hasCameraTemperature = vital.source.toLowerCase() == 'camera';
+    }
+    recorded.add(key);
+  }
+
+  const required = {
+    'height',
+    'weight',
+    'bloodpressure',
+    'heartrate',
+    'oxygen',
+    'breathingrate',
+  };
+  return hasCameraTemperature && required.every(recorded.contains);
 }
 
 List<String> _allergiesForPatient(String name) {
