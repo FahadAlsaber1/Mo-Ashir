@@ -1,8 +1,5 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../height_weight_scanner/height_weight_scanner_page.dart';
-import '../height_weight_scanner/body_analysis_api.dart';
 import '../services/backend_api.dart';
 import '../services/thermal_camera.dart';
 
@@ -16,7 +13,6 @@ class HospitalStationScreen extends StatefulWidget {
 class _HospitalStationScreenState extends State<HospitalStationScreen> {
   late Future<List<BackendAppointment>> _appointmentsFuture;
   BackendAppointment? _selectedAppointment;
-  ScanResult? _confirmationCapture;
   ThermalCameraResult? _thermalResult;
   String? _message;
   String? _appointmentLoadError;
@@ -48,9 +44,8 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
 
   Future<void> _runThermalCamera() async {
     final appointment = _selectedAppointment;
-    if (_confirmationCapture == null) {
-      setState(
-          () => _message = 'Capture the laptop camera confirmation first.');
+    if (appointment == null) {
+      setState(() => _message = 'Select an appointment first.');
       return;
     }
 
@@ -60,9 +55,9 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
     });
 
     final patientName =
-        (appointment?.patient?['full_name'] as String?)?.trim() ?? 'Patient';
+        (appointment.patient?['full_name'] as String?)?.trim() ?? 'Patient';
     final thermal = await ThermalCamera.captureVerifiedTemperature(
-      patientId: appointment?.patientId,
+      patientId: appointment.patientId,
       patientName: patientName,
     );
 
@@ -89,7 +84,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
       await BackendApi.createLatestAppointmentTemperature(
         temperatureC: thermal.temperatureC,
         capturedAt: thermal.capturedAt,
-        confirmation: 'Laptop camera confirmation captured before thermal scan',
+        confirmation: 'Thermal camera station capture',
       );
       if (!mounted) return;
       setState(() => _message = 'Temperature saved to doctor dashboard.');
@@ -115,12 +110,12 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
             padding: const EdgeInsets.all(20),
             children: [
               const Text(
-                'Patient confirmation',
+                'Thermal camera',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 6),
               const Text(
-                'Run this station when the patient enters the hospital.',
+                'Capture the patient temperature from the thermal camera.',
                 style: TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 18),
@@ -155,47 +150,11 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
                     onChanged: (appointment) {
                       setState(() {
                         _selectedAppointment = appointment;
-                        _confirmationCapture = null;
                         _thermalResult = null;
                       });
                     },
                   ),
                 ),
-              const SizedBox(height: 14),
-              _StationCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Laptop camera confirmation',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 470,
-                      child: HeightWeightScannerPage(
-                        key: ValueKey(_selectedAppointment?.id ?? 'station'),
-                        initialLensDirection: CameraLensDirection.front,
-                        embedded: true,
-                        onResult: (result) {
-                          setState(() {
-                            _confirmationCapture = result;
-                            _message =
-                                'Laptop photo confirmed by body analysis API.';
-                          });
-                        },
-                      ),
-                    ),
-                    if (_confirmationCapture != null) ...[
-                      const SizedBox(height: 12),
-                      _StationSuccess(
-                        text:
-                            'Photo confirmed. Height ${_confirmationCapture!.heightCm.toStringAsFixed(1)} cm, weight ${_confirmationCapture!.weightKg.toStringAsFixed(1)} kg.',
-                      ),
-                    ],
-                  ],
-                ),
-              ),
               const SizedBox(height: 14),
               _StationCard(
                 child: Column(
@@ -267,28 +226,6 @@ class _StationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: child,
-    );
-  }
-}
-
-class _StationSuccess extends StatelessWidget {
-  const _StationSuccess({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: primary.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: primary, fontWeight: FontWeight.w800),
-      ),
     );
   }
 }
