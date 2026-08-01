@@ -1852,7 +1852,7 @@ class _PatientMedicalHistoryScreenState
             ),
             const SizedBox(height: 10),
             const Text(
-              'Temperature is measured from camera only.',
+              'Review the latest measurements from camera, app, manual entry, or connected devices. Confirm each vital or request a retake.',
               style:
                   TextStyle(color: Colors.black54, fontSize: 12, height: 1.35),
             ),
@@ -1864,11 +1864,11 @@ class _PatientMedicalHistoryScreenState
                   return const Center(child: CircularProgressIndicator());
                 }
                 final vitals = snapshot.data ?? const <BackendVital>[];
-                return Column(
-                  children: [
-                    _buildVitalCard('Temperature', vitals, ['camera']),
-                  ],
-                );
+                final cards = _buildVitalCards(vitals);
+                if (cards.isEmpty) {
+                  return const _WhitePillText('No vitals recorded yet.');
+                }
+                return Column(children: cards);
               },
             ),
           ],
@@ -1877,43 +1877,46 @@ class _PatientMedicalHistoryScreenState
     );
   }
 
-  Widget _buildVitalCard(
-    String title,
-    List<BackendVital> vitals,
-    List<String> allowedSources,
-  ) {
-    final matching = _matchingVitals(title, vitals, allowedSources);
-    final sources = matching.isEmpty
-        ? [
-            const _VitalSource(
-              label: 'Not recorded',
-              value: 'Not recorded',
-              icon: Icons.info_outline,
-            )
-          ]
-        : matching.map(_sourceFromVital).toList();
-    return _VitalApprovalCard(
-      title: title,
-      status: _statusFor(title, matching),
-      sources: sources,
-      onApprove: () => _setVitalApproval(title, matching, 'confirmed'),
-      onRemeasure: () => _setVitalApproval(title, matching, 'retake_requested'),
-    );
+  List<Widget> _buildVitalCards(List<BackendVital> vitals) {
+    final grouped = <String, List<BackendVital>>{};
+    for (final vital in vitals) {
+      final key = _normalizeVitalName(vital.vitalType);
+      if (key.isEmpty) continue;
+      grouped.putIfAbsent(key, () => []).add(vital);
+    }
+
+    const preferredOrder = [
+      'temperature',
+      'height',
+      'weight',
+      'bloodpressure',
+      'heartrate',
+      'oxygen',
+      'breathingrate',
+    ];
+
+    final orderedKeys = [
+      for (final key in preferredOrder)
+        if (grouped.containsKey(key)) key,
+      ...grouped.keys.where((key) => !preferredOrder.contains(key)),
+    ];
+
+    return [
+      for (final key in orderedKeys)
+        _buildVitalCard(
+            _displayVitalTitle(key), grouped[key]!.take(1).toList()),
+    ];
   }
 
-  List<BackendVital> _matchingVitals(
-    String title,
-    List<BackendVital> vitals,
-    List<String> allowedSources,
-  ) {
-    final normalizedTitle = _normalizeVitalName(title);
-    final allowed =
-        allowedSources.map((source) => source.toLowerCase()).toSet();
-    return vitals
-        .where((vital) =>
-            _normalizeVitalName(vital.vitalType) == normalizedTitle &&
-            allowed.contains(vital.source.toLowerCase()))
-        .toList();
+  Widget _buildVitalCard(String title, List<BackendVital> vitals) {
+    final sources = vitals.map(_sourceFromVital).toList();
+    return _VitalApprovalCard(
+      title: title,
+      status: _statusFor(title, vitals),
+      sources: sources,
+      onApprove: () => _setVitalApproval(title, vitals, 'confirmed'),
+      onRemeasure: () => _setVitalApproval(title, vitals, 'retake_requested'),
+    );
   }
 
   _VitalSource _sourceFromVital(BackendVital vital) {
@@ -1991,6 +1994,22 @@ class _PatientMedicalHistoryScreenState
 
   String _normalizeVitalName(String value) {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  String _displayVitalTitle(String normalized) {
+    return switch (normalized) {
+      'bloodpressure' => 'Blood Pressure',
+      'heartrate' => 'Heart Rate',
+      'breathingrate' => 'Breathing Rate',
+      'bodytemperature' || 'temperature' => 'Temperature',
+      _ => normalized.replaceAllMapped(RegExp(r'(^|[0-9])([a-z])'), (match) {
+          final prefix = match.group(1) ?? '';
+          final letter = match.group(2) ?? '';
+          return '$prefix${letter.toUpperCase()}';
+        }).replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) {
+          return '${match.group(1)} ${match.group(2)}';
+        }),
+    };
   }
 
   String _displayValue(String value) {
