@@ -535,11 +535,13 @@ class _DoctorWallFinishDialog extends StatefulWidget {
 }
 
 class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
-  final _medicine = TextEditingController(text: 'Paracetamol');
-  final _dose = TextEditingController(text: '500 mg');
-  final _schedule = TextEditingController(text: 'Every 8 hours for 3 days');
+  final _medicine =
+      TextEditingController(text: 'Amoxicillin 500mg x2, Paracetamol 500mg');
+  final _dose = TextEditingController(text: 'As prescribed');
+  final _schedule = TextEditingController(text: 'Send request to patient');
   final _date = TextEditingController(text: 'Next week');
   final _time = TextEditingController(text: '10:30 AM');
+  String _deliverySource = 'Hospital';
   bool _bookFollowUp = true;
 
   @override
@@ -554,71 +556,236 @@ class _DoctorWallFinishDialogState extends State<_DoctorWallFinishDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Complete ${widget.patient.name}'),
-      content: SingleChildScrollView(
+    final primary = Theme.of(context).colorScheme.primary;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Book follow-up'),
-              value: _bookFollowUp,
-              onChanged: (value) => setState(() => _bookFollowUp = value),
+            Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Complete ${widget.patient.name}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
             ),
-            if (_bookFollowUp) ...[
-              _DoctorWallDialogField(
-                controller: _date,
-                label: 'Follow-up date',
-                icon: Icons.calendar_today_outlined,
+            const SizedBox(height: 6),
+            const Text(
+              'Book follow-up and prescribe medicine before closing the visit.',
+              style: TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            _DoctorWallDialogSection(
+              icon: Icons.event_available_outlined,
+              title: 'Book follow-up',
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Add follow-up appointment'),
+                    value: _bookFollowUp,
+                    onChanged: (value) => setState(() => _bookFollowUp = value),
+                  ),
+                  if (_bookFollowUp) ...[
+                    _DoctorWallDialogField(
+                      controller: _date,
+                      label: 'Follow-up date',
+                      icon: Icons.calendar_today_outlined,
+                    ),
+                    _DoctorWallDialogField(
+                      controller: _time,
+                      label: 'Follow-up time',
+                      icon: Icons.schedule_outlined,
+                    ),
+                  ],
+                ],
               ),
-              _DoctorWallDialogField(
-                controller: _time,
-                label: 'Follow-up time',
-                icon: Icons.schedule_outlined,
+            ),
+            const SizedBox(height: 14),
+            _DoctorWallDialogSection(
+              icon: Icons.local_shipping_outlined,
+              title: 'Send medication delivery request',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'The patient will pick their address, arrival date, and payment method.',
+                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Delivery source',
+                      style:
+                          TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DoctorWallSourceButton(
+                          label: 'Hospital',
+                          icon: Icons.local_hospital_outlined,
+                          selected: _deliverySource == 'Hospital',
+                          onTap: () =>
+                              setState(() => _deliverySource = 'Hospital'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _DoctorWallSourceButton(
+                          label: 'Pharmacy',
+                          icon: Icons.medication_liquid_outlined,
+                          selected: _deliverySource == 'Pharmacy',
+                          onTap: () =>
+                              setState(() => _deliverySource = 'Pharmacy'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _DoctorWallDialogField(
+                    controller: _medicine,
+                    label: 'Medications',
+                    icon: Icons.medication_outlined,
+                    minLines: 2,
+                  ),
+                  _DoctorWallDialogField(
+                    controller: _dose,
+                    label: 'Dose',
+                    icon: Icons.straighten_outlined,
+                  ),
+                  _DoctorWallDialogField(
+                    controller: _schedule,
+                    label: 'Instructions',
+                    icon: Icons.repeat_outlined,
+                  ),
+                ],
               ),
-            ],
-            const SizedBox(height: 10),
-            _DoctorWallDialogField(
-              controller: _medicine,
-              label: 'Prescription',
-              icon: Icons.medication_outlined,
             ),
-            _DoctorWallDialogField(
-              controller: _dose,
-              label: 'Dose',
-              icon: Icons.straighten_outlined,
-            ),
-            _DoctorWallDialogField(
-              controller: _schedule,
-              label: 'Schedule',
-              icon: Icons.repeat_outlined,
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(
+                        context,
+                        _DoctorWallFinishPlan(
+                          bookFollowUp: _bookFollowUp,
+                          followUpDate: _date.text,
+                          followUpTime: _time.text,
+                          prescriptionName: _medicine.text,
+                          prescriptionDose: _dose.text,
+                          prescriptionSchedule:
+                              '$_deliverySource - ${_schedule.text}',
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.local_shipping_outlined, size: 16),
+                    label: const Text('Send request'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+    );
+  }
+}
+
+class _DoctorWallDialogSection extends StatelessWidget {
+  const _DoctorWallDialogSection({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFFFF5),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: primary, size: 18),
+              const SizedBox(width: 7),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w900)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _DoctorWallSourceButton extends StatelessWidget {
+  const _DoctorWallSourceButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      height: 40,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          backgroundColor:
+              selected ? const Color(0xFFD4F5DE) : const Color(0xFFEFFFF5),
+          foregroundColor: selected ? primary : Colors.black87,
+          side: BorderSide(color: selected ? primary : const Color(0xFFD8E8DE)),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
         ),
-        FilledButton(
-          onPressed: () {
-            Navigator.pop(
-              context,
-              _DoctorWallFinishPlan(
-                bookFollowUp: _bookFollowUp,
-                followUpDate: _date.text,
-                followUpTime: _time.text,
-                prescriptionName: _medicine.text,
-                prescriptionDose: _dose.text,
-                prescriptionSchedule: _schedule.text,
-              ),
-            );
-          },
-          child: const Text('Save'),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -628,11 +795,13 @@ class _DoctorWallDialogField extends StatelessWidget {
     required this.controller,
     required this.label,
     required this.icon,
+    this.minLines = 1,
   });
 
   final TextEditingController controller;
   final String label;
   final IconData icon;
+  final int minLines;
 
   @override
   Widget build(BuildContext context) {
@@ -640,6 +809,8 @@ class _DoctorWallDialogField extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
         controller: controller,
+        minLines: minLines,
+        maxLines: minLines == 1 ? 1 : 4,
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
@@ -1072,7 +1243,7 @@ class _DoctorWallQueueRow extends StatelessWidget {
               SizedBox(
                 height: 34,
                 child: FilledButton.icon(
-                  onPressed: !started || savingFinish ? null : onComplete,
+                  onPressed: savingFinish ? null : onComplete,
                   icon: const Icon(Icons.check_circle_outline, size: 15),
                   label: const Text('Complete'),
                   style: FilledButton.styleFrom(
