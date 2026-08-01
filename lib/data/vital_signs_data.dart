@@ -80,12 +80,6 @@ const vitalSignCards = [
     isActive: false,
   ),
   VitalSignCardData(
-    key: VitalSignKey.temperature,
-    title: 'Temperature',
-    icon: Icons.thermostat_outlined,
-    isActive: false,
-  ),
-  VitalSignCardData(
     key: VitalSignKey.height,
     title: 'Height',
     icon: Icons.height_rounded,

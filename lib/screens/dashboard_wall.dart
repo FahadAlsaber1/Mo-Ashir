@@ -576,6 +576,9 @@ class _DoctorWallHistoryState extends State<_DoctorWallHistory> {
     final grouped = <String, BackendVital>{};
     for (final vital in vitals) {
       final key = _normalizeVitalName(vital.vitalType);
+      if (key == 'temperature' && vital.source.toLowerCase() != 'camera') {
+        continue;
+      }
       grouped.putIfAbsent(key, () => vital);
     }
     const order = [

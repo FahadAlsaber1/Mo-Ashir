@@ -583,6 +583,11 @@ def create_patient_vitals(
             continue
         if source not in allowed_sources:
             raise HTTPException(status_code=422, detail="Invalid vital source.")
+        if _normalize_vital_name(vital_type) == "temperature" and source != "camera":
+            raise HTTPException(
+                status_code=422,
+                detail="Temperature must be captured from the camera.",
+            )
         rows.append(
             {
                 "patient_id": normalized_patient_id,
@@ -1287,6 +1292,10 @@ def _normalized_measured_at(value: str | None) -> str:
         except ValueError:
             pass
     return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_vital_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
 def _load_doctor_by_name(client, full_name: str) -> dict[str, Any] | None:

@@ -1881,6 +1881,9 @@ class _PatientMedicalHistoryScreenState
     final grouped = <String, List<BackendVital>>{};
     for (final vital in vitals) {
       final key = _normalizeVitalName(vital.vitalType);
+      if (key == 'temperature' && vital.source.toLowerCase() != 'camera') {
+        continue;
+      }
       if (key.isEmpty) continue;
       grouped.putIfAbsent(key, () => []).add(vital);
     }
