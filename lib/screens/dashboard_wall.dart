@@ -274,6 +274,8 @@ class _DoctorWallPatient {
   final String bloodType;
   final String ctasLabel;
   final List<String> allergies;
+
+  String get queueKey => appointmentId.isNotEmpty ? appointmentId : patientId;
 }
 
 class _DoctorWallHome extends StatefulWidget {
@@ -433,7 +435,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
                   startedPatientIds: _startedPatientIds,
                   savingFinish: _savingFinish,
                   onStart: (patient) {
-                    setState(() => _startedPatientIds.add(patient.patientId));
+                    setState(() => _startedPatientIds.add(patient.queueKey));
                   },
                   onComplete: _finishSession,
                   onOpenHistory: widget.onOpenHistory,
@@ -552,6 +554,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
       if (!mounted) return;
       setState(() {
         _startedPatientIds.remove(patient.patientId);
+        _startedPatientIds.remove(patient.queueKey);
         _completionPatient = null;
       });
       if (AppSession.latestAppointment?.id == patient.appointmentId) {
@@ -1164,16 +1167,16 @@ class _DoctorWallQueuePanelState extends State<_DoctorWallQueuePanel> {
     final entries = await Future.wait(
       widget.patients.map((patient) async {
         if (patient.patientId.isEmpty) {
-          return MapEntry(patient.patientId, false);
+          return MapEntry(patient.queueKey, false);
         }
         try {
           final vitals = await BackendApi.listVitals(
             patientId: patient.patientId,
             appointmentId: patient.appointmentId,
           );
-          return MapEntry(patient.patientId, _isPatientCheckedIn(vitals));
+          return MapEntry(patient.queueKey, _isPatientCheckedIn(vitals));
         } catch (_) {
-          return MapEntry(patient.patientId, false);
+          return MapEntry(patient.queueKey, false);
         }
       }),
     );
@@ -1231,10 +1234,10 @@ class _DoctorWallQueuePanelState extends State<_DoctorWallQueuePanel> {
                       queueNumber: 'A${13 + index}',
                       patient: widget.patients[index],
                       checkedIn:
-                          checkedStates[widget.patients[index].patientId] ??
+                          checkedStates[widget.patients[index].queueKey] ??
                               false,
                       started: widget.startedPatientIds
-                          .contains(widget.patients[index].patientId),
+                          .contains(widget.patients[index].queueKey),
                       savingFinish: widget.savingFinish,
                       onStart: () => widget.onStart(widget.patients[index]),
                       onComplete: () =>
