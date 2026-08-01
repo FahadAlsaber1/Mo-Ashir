@@ -16,31 +16,42 @@ class DashboardWall extends StatelessWidget {
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.noScaling,
         ),
-        child: const SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: 26, vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _PhonePanel(
-                    caption: "Logged in as Mo'Ashir doctor",
-                    role: 'doctor',
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: const Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _PhonePanel(
+                            caption: "Logged in as Mo'Ashir doctor",
+                            role: 'doctor',
+                          ),
+                          SizedBox(width: 34),
+                          _PhonePanel(
+                            caption: "Logged in as Mo'Ashir patient",
+                            role: 'patient',
+                          ),
+                          SizedBox(width: 34),
+                          _PhonePanel(
+                            caption: "Logged in as Mo'Ashir administrator",
+                            role: 'admin',
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  SizedBox(width: 34),
-                  _PhonePanel(
-                    caption: "Logged in as Mo'Ashir patient",
-                    role: 'patient',
-                  ),
-                  SizedBox(width: 34),
-                  _PhonePanel(
-                    caption: "Logged in as Mo'Ashir administrator",
-                    role: 'admin',
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -57,7 +68,9 @@ class _PhonePanel extends StatelessWidget {
   final String caption;
   final String role;
 
-  static const _phoneSize = Size(430, 932);
+  static const _contentSize = Size(430, 932);
+  static const _framePadding = 12.0;
+  static const _phoneSize = Size(454, 956);
 
   @override
   Widget build(BuildContext context) {
@@ -88,10 +101,13 @@ class _PhonePanel extends StatelessWidget {
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(_framePadding),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(44),
-                child: PhoneAppFrame(role: role),
+                child: SizedBox.fromSize(
+                  size: _contentSize,
+                  child: PhoneAppFrame(role: role),
+                ),
               ),
             ),
           ),
