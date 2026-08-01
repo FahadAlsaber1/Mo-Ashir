@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'services/app_session.dart';
 import 'screens/dashboard_wall.dart';
 import 'screens/login.dart';
 import 'screens/splash.dart';
@@ -60,7 +59,7 @@ class _IPhoneWebFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= 1100 && AppSession.isAdmin) {
+        if (constraints.maxWidth >= 1100) {
           return const DashboardWall();
         }
 
