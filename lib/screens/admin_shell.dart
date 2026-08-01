@@ -23,6 +23,7 @@ class _AdminShellState extends State<AdminShell> {
     final results = await Future.wait([
       BackendApi.listDoctors(),
       BackendApi.listPatients(),
+      BackendApi.listDoctorReviews(),
     ]);
     final doctors = results[0] as List<BackendDoctor>;
     final appointmentsByDoctor = <String, List<BackendAppointment>>{};
@@ -42,6 +43,7 @@ class _AdminShellState extends State<AdminShell> {
     return _AdminDashboardData(
       doctors: doctors,
       patients: results[1] as List<BackendPatient>,
+      reviews: results[2] as List<BackendDoctorReview>,
       appointmentsByDoctor: appointmentsByDoctor,
     );
   }
@@ -121,6 +123,14 @@ class _AdminShellState extends State<AdminShell> {
                 ],
               ),
               const SizedBox(height: 24),
+              const _AdminSectionTitle('Doctor reviews'),
+              const SizedBox(height: 10),
+              if (data.reviews.isEmpty)
+                const _AdminPlainCard('No doctor reviews submitted yet.')
+              else
+                for (final review in data.reviews.take(5))
+                  _AdminDoctorReviewCard(review: review),
+              const SizedBox(height: 24),
               const _AdminSectionTitle('Doctors with patients'),
               const SizedBox(height: 10),
               if (data.doctors.isEmpty)
@@ -145,6 +155,7 @@ class _AdminDashboardData {
   const _AdminDashboardData({
     required this.doctors,
     required this.patients,
+    required this.reviews,
     required this.appointmentsByDoctor,
   });
 
@@ -152,12 +163,14 @@ class _AdminDashboardData {
     return const _AdminDashboardData(
       doctors: [],
       patients: [],
+      reviews: [],
       appointmentsByDoctor: {},
     );
   }
 
   final List<BackendDoctor> doctors;
   final List<BackendPatient> patients;
+  final List<BackendDoctorReview> reviews;
   final Map<String, List<BackendAppointment>> appointmentsByDoctor;
 }
 
@@ -249,6 +262,130 @@ class _AdminListTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AdminDoctorReviewCard extends StatelessWidget {
+  const _AdminDoctorReviewCard({required this.review});
+
+  final BackendDoctorReview review;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                backgroundColor: primary.withValues(alpha: .12),
+                child: Icon(Icons.star, color: primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.doctorName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      'Reviewed by ${review.patientName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _AdminRatingStars(rating: review.rating),
+            ],
+          ),
+          if (review.tags.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final tag in review.tags.take(4))
+                  _AdminReviewTag(label: tag),
+              ],
+            ),
+          ],
+          if (review.comment.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              review.comment,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.black87, fontSize: 13),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminRatingStars extends StatelessWidget {
+  const _AdminRatingStars({required this.rating});
+
+  final int rating;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= 5; i++)
+          Icon(
+            i <= rating ? Icons.star : Icons.star_border,
+            color:
+                i <= rating ? const Color(0xFFFFB703) : const Color(0xFFB8C2BB),
+            size: 14,
+          ),
+      ],
+    );
+  }
+}
+
+class _AdminReviewTag extends StatelessWidget {
+  const _AdminReviewTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: primary,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

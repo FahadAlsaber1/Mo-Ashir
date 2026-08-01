@@ -20,12 +20,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<BackendAppointment?> _appointmentFuture;
   late Future<List<BackendMedication>> _medicationsFuture;
+  late Future<List<BackendDoctorReview>> _reviewsFuture;
+  final Set<String> _submittedReviewKeys = <String>{};
 
   @override
   void initState() {
     super.initState();
     _appointmentFuture = _loadAppointment();
     _medicationsFuture = _loadMedications();
+    _reviewsFuture = _loadReviews();
   }
 
   Future<BackendAppointment?> _loadAppointment() async {
@@ -46,6 +49,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final patientId = AppSession.patientId;
     if (patientId == null) return Future.value(const []);
     return BackendApi.listMedications(patientId: patientId);
+  }
+
+  Future<List<BackendDoctorReview>> _loadReviews() {
+    final patientId = AppSession.patientId;
+    if (patientId == null) return Future.value(const []);
+    return BackendApi.listDoctorReviews(patientId: patientId);
   }
 
   @override
@@ -188,18 +197,38 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (context, appointmentSnapshot) {
                 final appointment = appointmentSnapshot.data;
                 final hasDelivery = _hasTrackableDelivery(medications);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (hasDelivery) ...[
-                      _RateDoctorPrompt(
-                        doctorName: _ratingDoctorName(appointment),
-                        doctorSpecialty: _ratingDoctorSpecialty(appointment),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    MedicationDeliveryMapCard(medications: medications),
-                  ],
+                return FutureBuilder<List<BackendDoctorReview>>(
+                  future: _reviewsFuture,
+                  builder: (context, reviewSnapshot) {
+                    final reviews =
+                        reviewSnapshot.data ?? const <BackendDoctorReview>[];
+                    final showRating = hasDelivery &&
+                        !_hasSubmittedReview(appointment, reviews);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (showRating) ...[
+                          _RateDoctorPrompt(
+                            doctorName: _ratingDoctorName(appointment),
+                            doctorSpecialty:
+                                _ratingDoctorSpecialty(appointment),
+                            doctorId: appointment?.doctorId ?? '',
+                            appointmentId: appointment?.id ?? '',
+                            onSubmitted: () {
+                              setState(() {
+                                _submittedReviewKeys.add(
+                                  _reviewKey(appointment),
+                                );
+                                _reviewsFuture = _loadReviews();
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        MedicationDeliveryMapCard(medications: medications),
+                      ],
+                    );
+                  },
                 );
               },
             );
@@ -218,6 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _appointmentFuture = _loadAppointment();
           _medicationsFuture = _loadMedications();
+          _reviewsFuture = _loadReviews();
         });
       }
     });
@@ -239,6 +269,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return specialty != null && specialty.isNotEmpty
         ? specialty
         : 'General Physician';
+  }
+
+  bool _hasSubmittedReview(
+    BackendAppointment? appointment,
+    List<BackendDoctorReview> reviews,
+  ) {
+    final key = _reviewKey(appointment);
+    if (_submittedReviewKeys.contains(key)) return true;
+    final appointmentId = appointment?.id.trim() ?? '';
+    final doctorId = appointment?.doctorId.trim() ?? '';
+    final doctorName = _ratingDoctorName(appointment).toLowerCase();
+    return reviews.any((review) {
+      if (appointmentId.isNotEmpty && review.appointmentId == appointmentId) {
+        return true;
+      }
+      if (doctorId.isNotEmpty && review.doctorId == doctorId) return true;
+      return review.doctorName.toLowerCase() == doctorName;
+    });
+  }
+
+  String _reviewKey(BackendAppointment? appointment) {
+    final appointmentId = appointment?.id.trim() ?? '';
+    if (appointmentId.isNotEmpty) return 'appointment:$appointmentId';
+    return 'doctor:${_ratingDoctorName(appointment).toLowerCase()}';
   }
 
   Widget _quick(BuildContext context, IconData icon, String label,
@@ -280,10 +334,16 @@ class _RateDoctorPrompt extends StatelessWidget {
   const _RateDoctorPrompt({
     required this.doctorName,
     required this.doctorSpecialty,
+    required this.doctorId,
+    required this.appointmentId,
+    required this.onSubmitted,
   });
 
   final String doctorName;
   final String doctorSpecialty;
+  final String doctorId;
+  final String appointmentId;
+  final VoidCallback onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -292,14 +352,7 @@ class _RateDoctorPrompt extends StatelessWidget {
       color: const Color(0xFFEFFFF5),
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => _RateDoctorScreen(
-              doctorName: doctorName,
-              doctorSpecialty: doctorSpecialty,
-            ),
-          ),
-        ),
+        onTap: () => _openRating(context),
         borderRadius: BorderRadius.circular(24),
         child: Container(
           padding: const EdgeInsets.all(14),
@@ -336,14 +389,7 @@ class _RateDoctorPrompt extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => _RateDoctorScreen(
-                      doctorName: doctorName,
-                      doctorSpecialty: doctorSpecialty,
-                    ),
-                  ),
-                ),
+                onPressed: () => _openRating(context),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(64, 36),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -356,16 +402,34 @@ class _RateDoctorPrompt extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _openRating(BuildContext context) async {
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _RateDoctorScreen(
+          doctorName: doctorName,
+          doctorSpecialty: doctorSpecialty,
+          doctorId: doctorId,
+          appointmentId: appointmentId,
+        ),
+      ),
+    );
+    if (submitted == true) onSubmitted();
+  }
 }
 
 class _RateDoctorScreen extends StatefulWidget {
   const _RateDoctorScreen({
     required this.doctorName,
     required this.doctorSpecialty,
+    required this.doctorId,
+    required this.appointmentId,
   });
 
   final String doctorName;
   final String doctorSpecialty;
+  final String doctorId;
+  final String appointmentId;
 
   @override
   State<_RateDoctorScreen> createState() => _RateDoctorScreenState();
@@ -375,6 +439,7 @@ class _RateDoctorScreenState extends State<_RateDoctorScreen> {
   final _comment = TextEditingController();
   final Set<String> _selectedTags = <String>{};
   int _rating = 0;
+  bool _submitting = false;
 
   static const _tags = [
     'Professional',
@@ -537,21 +602,48 @@ class _RateDoctorScreenState extends State<_RateDoctorScreen> {
             SizedBox(
               height: 52,
               child: FilledButton(
-                onPressed: _rating == 0
-                    ? null
-                    : () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Review submitted.')),
-                        );
-                        Navigator.of(context).pop();
-                      },
-                child: const Text('Submit Review'),
+                onPressed: _rating == 0 || _submitting ? null : _submitReview,
+                child: Text(_submitting ? 'Submitting...' : 'Submit Review'),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _submitReview() async {
+    final patientId = AppSession.patientId;
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Patient account not found.')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await BackendApi.submitDoctorReview(
+        patientId: patientId,
+        doctorId: widget.doctorId,
+        doctorName: widget.doctorName,
+        appointmentId: widget.appointmentId,
+        rating: _rating,
+        tags: _selectedTags.toList(),
+        comment: _comment.text,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Review submitted.')),
+      );
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not submit review: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 }
 

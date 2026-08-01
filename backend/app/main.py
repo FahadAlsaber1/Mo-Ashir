@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 from datetime import datetime, timezone
@@ -17,6 +18,8 @@ from .supabase_client import get_supabase_client
 
 
 app = FastAPI(title="MO'ASHIR API", version="0.1.0")
+
+_DOCTOR_REVIEW_PREFIX = "DOCTOR_REVIEW::"
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,6 +93,16 @@ class CreateMedicationRequest(BaseModel):
     schedule: str | None = None
     active: bool = True
     delivery_status: str = "out_for_delivery"
+
+
+class CreateDoctorReviewRequest(BaseModel):
+    patient_id: str
+    doctor_id: str | None = None
+    doctor_name: str | None = None
+    appointment_id: str | None = None
+    rating: int
+    tags: list[str] = []
+    comment: str | None = None
 
 
 class CreateVitalRequest(BaseModel):
@@ -586,6 +599,96 @@ def create_patient_medication(
     medication = response.data[0]
     medication.setdefault("delivery_status", delivery_status)
     return {"medication": medication}
+
+
+@app.get("/api/doctor-reviews")
+def list_doctor_reviews(
+    patient_id: str | None = None,
+    doctor_id: str | None = None,
+) -> dict[str, Any]:
+    client = _service_client()
+    try:
+        query = (
+            client.table("messages")
+            .select("id, patient_id, doctor_id, body, created_at")
+            .eq("sender_role", "patient")
+            .like("body", f"{_DOCTOR_REVIEW_PREFIX}%")
+            .order("created_at", desc=True)
+            .limit(100)
+        )
+        if patient_id is not None and patient_id.strip():
+            query = query.eq("patient_id", patient_id.strip())
+        if doctor_id is not None and doctor_id.strip():
+            query = query.eq("doctor_id", doctor_id.strip())
+        response = query.execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not read doctor reviews from Supabase.",
+        ) from exc
+    return {
+        "reviews": [
+            _review_message_payload(client, message)
+            for message in response.data or []
+        ]
+    }
+
+
+@app.post("/api/doctor-reviews")
+def create_doctor_review(payload: CreateDoctorReviewRequest) -> dict[str, Any]:
+    patient_id = payload.patient_id.strip()
+    doctor_id = (payload.doctor_id or "").strip()
+    doctor_name = (payload.doctor_name or "").strip()
+    appointment_id = (payload.appointment_id or "").strip() or None
+    comment = (payload.comment or "").strip() or None
+    tags = _clean_text_list(payload.tags)
+
+    if not patient_id:
+        raise HTTPException(status_code=422, detail="Patient ID is required.")
+    if not doctor_id and not doctor_name:
+        raise HTTPException(status_code=422, detail="Doctor is required.")
+    if payload.rating < 1 or payload.rating > 5:
+        raise HTTPException(status_code=422, detail="Rating must be between 1 and 5.")
+
+    client = _service_client()
+    patient = _load_patient_by_id(client, patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+    doctor = _load_doctor_by_id(client, doctor_id) if doctor_id else None
+    if doctor is None and doctor_name:
+        doctor = _load_doctor_by_name(client, doctor_name)
+    if doctor is None:
+        raise HTTPException(status_code=404, detail="Doctor not found.")
+
+    try:
+        response = (
+            client.table("messages")
+            .insert(
+                {
+                    "patient_id": patient_id,
+                    "doctor_id": doctor["id"],
+                    "sender_role": "patient",
+                    "body": _DOCTOR_REVIEW_PREFIX
+                    + json.dumps(
+                        {
+                            "appointment_id": appointment_id or "",
+                            "rating": payload.rating,
+                            "tags": tags,
+                            "comment": comment or "",
+                        },
+                        ensure_ascii=True,
+                    ),
+                }
+            )
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save doctor review in Supabase.",
+        ) from exc
+
+    return {"review": _review_message_payload(client, response.data[0])}
 
 
 @app.get("/api/patients/{patient_id}/vitals")
@@ -1123,6 +1226,53 @@ def _service_client():
             detail="Supabase service role key is required for backend patient data.",
         )
     return get_supabase_client(use_service_role=True)
+
+
+def _review_message_payload(client, message: dict[str, Any]) -> dict[str, Any]:
+    review_data = _review_data_from_body(message.get("body"))
+    patient = _load_patient_by_id(client, message.get("patient_id", ""))
+    doctor = _load_doctor_by_id(client, message.get("doctor_id", ""))
+    return {
+        "id": str(message.get("id", "")),
+        "patient_id": str(message.get("patient_id", "")),
+        "doctor_id": str(message.get("doctor_id", "")),
+        "appointment_id": str(review_data.get("appointment_id") or ""),
+        "rating": review_data.get("rating") or 0,
+        "tags": review_data.get("tags") or [],
+        "comment": review_data.get("comment") or "",
+        "patient_name": (patient or {}).get("full_name") or "Patient",
+        "doctor_name": (doctor or {}).get("full_name") or "Doctor",
+        "doctor_specialty": (doctor or {}).get("specialty") or "",
+        "created_at": _iso_value(message.get("created_at")),
+        "updated_at": _iso_value(message.get("created_at")),
+    }
+
+
+def _review_data_from_body(body: Any) -> dict[str, Any]:
+    if not isinstance(body, str) or not body.startswith(_DOCTOR_REVIEW_PREFIX):
+        return {}
+    try:
+        decoded = json.loads(body[len(_DOCTOR_REVIEW_PREFIX) :])
+    except Exception:
+        return {}
+    if not isinstance(decoded, dict):
+        return {}
+    tags = decoded.get("tags")
+    if not isinstance(tags, list):
+        tags = []
+    rating = decoded.get("rating")
+    return {
+        "appointment_id": decoded.get("appointment_id") or "",
+        "rating": rating if isinstance(rating, int) else 0,
+        "tags": [str(tag) for tag in tags if str(tag).strip()],
+        "comment": decoded.get("comment") or "",
+    }
+
+
+def _iso_value(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value or "")
 
 
 def _hash_password(password: str) -> str:

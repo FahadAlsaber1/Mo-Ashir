@@ -304,6 +304,50 @@ class BackendMessage {
   }
 }
 
+class BackendDoctorReview {
+  const BackendDoctorReview({
+    required this.id,
+    required this.patientId,
+    required this.doctorId,
+    required this.appointmentId,
+    required this.rating,
+    required this.tags,
+    required this.comment,
+    required this.patientName,
+    required this.doctorName,
+    required this.doctorSpecialty,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String patientId;
+  final String doctorId;
+  final String appointmentId;
+  final int rating;
+  final List<String> tags;
+  final String comment;
+  final String patientName;
+  final String doctorName;
+  final String doctorSpecialty;
+  final String createdAt;
+
+  factory BackendDoctorReview.fromJson(Map<String, dynamic> json) {
+    return BackendDoctorReview(
+      id: _string(json['id']),
+      patientId: _string(json['patient_id']),
+      doctorId: _string(json['doctor_id']),
+      appointmentId: _string(json['appointment_id']),
+      rating: _int(json['rating']),
+      tags: _stringList(json['tags']),
+      comment: _string(json['comment']),
+      patientName: _string(json['patient_name'], fallback: 'Patient'),
+      doctorName: _string(json['doctor_name'], fallback: 'Doctor'),
+      doctorSpecialty: _string(json['doctor_specialty']),
+      createdAt: _string(json['created_at']),
+    );
+  }
+}
+
 class BackendApi {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -732,6 +776,76 @@ class BackendApi {
       throw BackendApiException('Invalid message response.');
     }
     return BackendMessage.fromJson(data['message'] as Map<String, dynamic>);
+  }
+
+  static Future<List<BackendDoctorReview>> listDoctorReviews({
+    String? patientId,
+    String? doctorId,
+  }) async {
+    if (demoMode) return const [];
+    final params = <String, String>{
+      if (patientId != null && patientId.trim().isNotEmpty)
+        'patient_id': patientId.trim(),
+      if (doctorId != null && doctorId.trim().isNotEmpty)
+        'doctor_id': doctorId.trim(),
+    };
+    final query = params.entries
+        .map(
+          (entry) =>
+              '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}',
+        )
+        .join('&');
+    final data =
+        await _get('/api/doctor-reviews${query.isEmpty ? '' : '?$query'}');
+    if (data is! Map<String, dynamic> || data['reviews'] is! List) {
+      throw BackendApiException('Invalid reviews response.');
+    }
+    return (data['reviews'] as List)
+        .whereType<Map<String, dynamic>>()
+        .map(BackendDoctorReview.fromJson)
+        .toList();
+  }
+
+  static Future<BackendDoctorReview> submitDoctorReview({
+    required String patientId,
+    required String doctorName,
+    required int rating,
+    required List<String> tags,
+    required String comment,
+    String? doctorId,
+    String? appointmentId,
+  }) async {
+    if (demoMode) {
+      return BackendDoctorReview(
+        id: 'demo-review',
+        patientId: patientId,
+        doctorId: doctorId ?? 'demo-doctor',
+        appointmentId: appointmentId ?? '',
+        rating: rating,
+        tags: tags,
+        comment: comment,
+        patientName: 'Fahad Alsaber',
+        doctorName: doctorName,
+        doctorSpecialty: 'General Physician',
+        createdAt: DateTime.now().toIso8601String(),
+      );
+    }
+    final data = await _post('/api/doctor-reviews', {
+      'patient_id': patientId,
+      if (doctorId != null && doctorId.trim().isNotEmpty)
+        'doctor_id': doctorId.trim(),
+      'doctor_name': doctorName,
+      if (appointmentId != null && appointmentId.trim().isNotEmpty)
+        'appointment_id': appointmentId.trim(),
+      'rating': rating,
+      'tags': tags,
+      'comment': comment,
+    });
+    if (data is! Map<String, dynamic> ||
+        data['review'] is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid review response.');
+    }
+    return BackendDoctorReview.fromJson(data['review'] as Map<String, dynamic>);
   }
 
   static Future<dynamic> _patch(String path, Map<String, dynamic> body) async {
