@@ -1,5 +1,7 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
+import '../height_weight_scanner/height_weight_scanner_page.dart';
 import '../services/backend_api.dart';
 import '../services/thermal_camera.dart';
 
@@ -13,6 +15,8 @@ class HospitalStationScreen extends StatefulWidget {
 class _HospitalStationScreenState extends State<HospitalStationScreen> {
   late Future<List<BackendAppointment>> _appointmentsFuture;
   BackendAppointment? _selectedAppointment;
+  ScanResult? _confirmationCapture;
+  DateTime? _confirmationCapturedAt;
   ThermalCameraResult? _thermalResult;
   String? _message;
   String? _appointmentLoadError;
@@ -49,6 +53,20 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
       return;
     }
 
+    final confirmationCapturedAt = _confirmationCapturedAt;
+    if (confirmationCapturedAt == null ||
+        DateTime.now().difference(confirmationCapturedAt) >
+            const Duration(seconds: 30)) {
+      setState(() {
+        _confirmationCapture = null;
+        _confirmationCapturedAt = null;
+        _thermalResult = null;
+        _message =
+            'Capture a fresh face confirmation before reading temperature.';
+      });
+      return;
+    }
+
     setState(() {
       _runningThermal = true;
       _message = 'Reading thermal camera...';
@@ -66,7 +84,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
       _runningThermal = false;
       _thermalResult = thermal;
       _message = thermal == null
-          ? 'Thermal camera did not return a verified temperature.'
+          ? 'No face detected. Temperature was not saved.'
           : 'Thermal temperature captured. Sending to doctor dashboard...';
     });
     if (thermal != null) {
@@ -84,7 +102,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
       await BackendApi.createLatestAppointmentTemperature(
         temperatureC: thermal.temperatureC,
         capturedAt: thermal.capturedAt,
-        confirmation: 'Thermal camera station capture',
+        confirmation: 'Fresh face confirmation captured before thermal scan',
       );
       if (!mounted) return;
       setState(() => _message = 'Temperature saved to doctor dashboard.');
@@ -132,7 +150,7 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
               else
                 _StationCard(
                   child: DropdownButtonFormField<BackendAppointment>(
-                    value: _selectedAppointment,
+                    initialValue: _selectedAppointment,
                     decoration: const InputDecoration(
                       labelText: 'Station appointment',
                       border: OutlineInputBorder(),
@@ -150,11 +168,48 @@ class _HospitalStationScreenState extends State<HospitalStationScreen> {
                     onChanged: (appointment) {
                       setState(() {
                         _selectedAppointment = appointment;
+                        _confirmationCapture = null;
+                        _confirmationCapturedAt = null;
                         _thermalResult = null;
                       });
                     },
                   ),
                 ),
+              const SizedBox(height: 14),
+              _StationCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Face confirmation',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 470,
+                      child: HeightWeightScannerPage(
+                        key: ValueKey(_selectedAppointment?.id ?? 'station'),
+                        initialLensDirection: CameraLensDirection.front,
+                        embedded: true,
+                        onResult: (result) {
+                          setState(() {
+                            _confirmationCapture = result;
+                            _confirmationCapturedAt = DateTime.now();
+                            _message = 'Face confirmed by body analysis API.';
+                          });
+                        },
+                      ),
+                    ),
+                    if (_confirmationCapture != null) ...[
+                      const SizedBox(height: 12),
+                      _StationSuccess(
+                        text:
+                            'Face confirmed. Height ${_confirmationCapture!.heightCm.toStringAsFixed(1)} cm, weight ${_confirmationCapture!.weightKg.toStringAsFixed(1)} kg.',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
               const SizedBox(height: 14),
               _StationCard(
                 child: Column(
@@ -226,6 +281,28 @@ class _StationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: child,
+    );
+  }
+}
+
+class _StationSuccess extends StatelessWidget {
+  const _StationSuccess({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: primary, fontWeight: FontWeight.w800),
+      ),
     );
   }
 }

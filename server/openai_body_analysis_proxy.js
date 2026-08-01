@@ -106,9 +106,11 @@ function parseModelJson(text) {
 function normalizeResult(result) {
   const heightCm = finiteNumberInRange(result.height_cm, 80, 240);
   const weightKg = finiteNumberInRange(result.weight_kg, 25, 250);
+  const faceVisible = result.face_visible === true;
 
   return {
-    capture_accepted: result.capture_accepted === true,
+    capture_accepted: result.capture_accepted === true && faceVisible,
+    face_visible: faceVisible,
     complete_body_visible: result.complete_body_visible === true,
     known_scale_visible: false,
     height_cm: heightCm,
@@ -165,12 +167,13 @@ async function analyzeBodyImage(imageDataUrl) {
               text: [
                 'You are analyzing one camera photo for a height and weight measurement workflow.',
                 'Return JSON only with this shape:',
-                '{"capture_accepted":boolean,"complete_body_visible":boolean,"known_scale_visible":false,"height_cm":number|null,"weight_kg":number|null,"message_ar":string,"message_en":string}',
+                '{"capture_accepted":boolean,"face_visible":boolean,"complete_body_visible":boolean,"known_scale_visible":false,"height_cm":number|null,"weight_kg":number|null,"message_ar":string,"message_en":string}',
                 'Rules:',
                 '- Return an approximate AI visual estimate for height_cm and weight_kg from the photo.',
-                '- Set capture_accepted true when a person is visible enough to make an estimate.',
+                '- Set face_visible true only when a human face is visible in the image.',
+                '- Set capture_accepted true only when a face is visible and a person is visible enough to make an estimate.',
                 '- Set complete_body_visible true only when the full body is visible from head to feet.',
-                '- If the photo is too dark, blank, or no person is visible, set capture_accepted false and return null values.',
+                '- If the photo is too dark, blank, no face is visible, or no person is visible, set capture_accepted false and return null values.',
                 '- Keep height_cm between 80 and 240 when provided.',
                 '- Keep weight_kg between 25 and 250 when provided.',
                 '- Messages must be short and mention that this is an AI visual estimate.',

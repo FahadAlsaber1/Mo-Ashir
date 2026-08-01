@@ -59,7 +59,25 @@ class ThermalCamera {
         decoded['face_recognition_confirmed'] ??
             decoded['faceRecognitionConfirmed'],
       );
-      if (temperature == null || !faceConfirmed) return null;
+      final faceDetected = _optionalBoolValue(
+            decoded['face_detected'] ?? decoded['faceDetected'],
+          ) ??
+          _optionalBoolValue(
+            decoded['person_detected'] ?? decoded['personDetected'],
+          ) ??
+          faceConfirmed;
+      final faceCount =
+          _intValue(decoded['face_count'] ?? decoded['faceCount']);
+      final faceConfidence = _doubleValue(
+        decoded['face_confidence'] ?? decoded['faceConfidence'],
+      );
+      if (temperature == null ||
+          !faceConfirmed ||
+          !faceDetected ||
+          faceCount == 0 ||
+          (faceConfidence != null && faceConfidence < 0.65)) {
+        return null;
+      }
 
       return ThermalCameraResult(
         temperatureC: temperature,
@@ -88,13 +106,30 @@ class ThermalCamera {
   }
 
   static bool _boolValue(Object? value) {
+    return _optionalBoolValue(value) ?? false;
+  }
+
+  static bool? _optionalBoolValue(Object? value) {
+    if (value == null) return null;
     if (value is bool) return value;
     if (value is String) {
       final normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+      if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+        return false;
+      }
     }
     if (value is num) return value != 0;
-    return false;
+    return null;
+  }
+
+  static int? _intValue(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
   }
 
   static DateTime? _dateValue(Object? value) {

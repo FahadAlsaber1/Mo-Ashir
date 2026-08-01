@@ -386,7 +386,9 @@ class _HeightWeightScannerPageState extends State<HeightWeightScannerPage>
     String? photoPath,
     String? photoDataUrl,
   }) {
-    final canUseEstimate = analysis.captureAccepted && analysis.hasEstimate;
+    final canUseEstimate = analysis.captureAccepted &&
+        analysis.faceVisible &&
+        analysis.hasEstimate;
     setState(() {
       _isWebScanning = false;
       _measurementState = canUseEstimate

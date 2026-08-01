@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 class BodyAnalysisResult {
   const BodyAnalysisResult({
     required this.captureAccepted,
+    required this.faceVisible,
     required this.completeBodyVisible,
     required this.knownScaleVisible,
     required this.messageAr,
@@ -17,6 +18,7 @@ class BodyAnalysisResult {
   });
 
   final bool captureAccepted;
+  final bool faceVisible;
   final bool completeBodyVisible;
   final bool knownScaleVisible;
   final String messageAr;
@@ -40,6 +42,7 @@ class BodyAnalysisResult {
   factory BodyAnalysisResult.fromJson(Map<String, dynamic> json) {
     return BodyAnalysisResult(
       captureAccepted: json['capture_accepted'] == true,
+      faceVisible: json['face_visible'] == true,
       completeBodyVisible: json['complete_body_visible'] == true,
       knownScaleVisible: json['known_scale_visible'] == true,
       messageAr: json['message_ar']?.toString() ?? '',
