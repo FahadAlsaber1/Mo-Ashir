@@ -89,7 +89,7 @@ class CreateMedicationRequest(BaseModel):
     dose: str | None = None
     schedule: str | None = None
     active: bool = True
-    delivery_status: str = "preparing_delivery"
+    delivery_status: str = "out_for_delivery"
 
 
 class CreateVitalRequest(BaseModel):
@@ -476,7 +476,7 @@ def list_patient_medications(patient_id: str) -> dict[str, Any]:
 
     medications = response.data or []
     for medication in medications:
-        medication.setdefault("delivery_status", "preparing_delivery")
+        medication.setdefault("delivery_status", "out_for_delivery")
     return {"medications": medications}
 
 

@@ -271,6 +271,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
           dose: plan.prescription!.dose,
           schedule: plan.prescription!.schedule,
           active: plan.prescription!.active,
+          deliveryStatus: 'out_for_delivery',
         );
       }
     } catch (_) {
@@ -1655,6 +1656,7 @@ class _PatientMedicalHistoryScreenState
         dose: prescription.dose,
         schedule: prescription.schedule,
         active: prescription.active,
+        deliveryStatus: 'out_for_delivery',
       );
       if (!mounted) return;
       setState(() => _medicationsFuture = _loadMedications());

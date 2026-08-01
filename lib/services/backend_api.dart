@@ -469,7 +469,7 @@ class BackendApi {
     required String dose,
     required String schedule,
     required bool active,
-    String deliveryStatus = 'preparing_delivery',
+    String deliveryStatus = 'out_for_delivery',
   }) async {
     if (demoMode) {
       return BackendMedication(
@@ -904,24 +904,7 @@ const _demoDoctorAppointments = [
   ),
 ];
 
-const _demoMedications = [
-  BackendMedication(
-    id: 'demo-medication',
-    name: 'Vitamin D',
-    dose: '1000 IU',
-    schedule: 'Once daily',
-    active: true,
-    deliveryStatus: 'out_for_delivery',
-  ),
-  BackendMedication(
-    id: 'demo-medication-2',
-    name: 'Paracetamol',
-    dose: '500 mg',
-    schedule: 'When needed',
-    active: true,
-    deliveryStatus: 'preparing_delivery',
-  ),
-];
+const List<BackendMedication> _demoMedications = [];
 
 const _demoVitals = [
   BackendVital(
