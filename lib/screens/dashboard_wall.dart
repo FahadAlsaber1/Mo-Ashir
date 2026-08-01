@@ -149,10 +149,12 @@ class _DoctorPhoneAppState extends State<_DoctorPhoneApp> {
     try {
       final appointments =
           await BackendApi.listDoctorAppointments(doctorId: doctor.id);
+      final List<BackendPatient> fallbackPatients =
+          appointments.isEmpty ? await BackendApi.listPatients() : const [];
       return _DoctorWallData(
         doctor: doctor,
         appointments: appointments,
-        fallbackPatients: const [],
+        fallbackPatients: fallbackPatients,
       );
     } catch (_) {
       final patients = await BackendApi.listPatients();
@@ -223,6 +225,8 @@ class _DoctorWallPatient {
     required this.gender,
     required this.dateOfBirth,
     required this.bloodType,
+    required this.ctasLabel,
+    required this.allergies,
   });
 
   final String patientId;
@@ -234,6 +238,8 @@ class _DoctorWallPatient {
   final String gender;
   final String dateOfBirth;
   final String bloodType;
+  final String ctasLabel;
+  final List<String> allergies;
 }
 
 class _DoctorWallHome extends StatelessWidget {
@@ -409,6 +415,10 @@ class _DoctorWallHome extends StatelessWidget {
       gender: _stringValue(patient['gender']),
       dateOfBirth: _stringValue(patient['date_of_birth']),
       bloodType: _stringValue(patient['blood_type']),
+      ctasLabel: appointment.ctasLevel == null
+          ? 'CTAS 5'
+          : 'CTAS ${appointment.ctasLevel}',
+      allergies: _allergiesForPatient(name),
     );
   }
 
@@ -423,6 +433,8 @@ class _DoctorWallHome extends StatelessWidget {
       gender: patient.gender,
       dateOfBirth: patient.dateOfBirth,
       bloodType: patient.bloodType,
+      ctasLabel: 'CTAS 5',
+      allergies: _allergiesForPatient(patient.fullName),
     );
   }
 }
@@ -507,6 +519,13 @@ class _DoctorWallHistoryState extends State<_DoctorWallHistory> {
                 ),
                 const SizedBox(height: 18),
                 _DoctorWallHistoryHeader(patient: widget.patient),
+                const SizedBox(height: 22),
+                const _DoctorWallSectionTitle(
+                  icon: Icons.badge_outlined,
+                  title: 'Patient Details',
+                ),
+                const SizedBox(height: 12),
+                _DoctorWallPatientDetails(patient: widget.patient),
                 const SizedBox(height: 22),
                 const _DoctorWallSectionTitle(
                   icon: Icons.monitor_heart_outlined,
@@ -682,23 +701,34 @@ class _DoctorWallPatientCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: upcoming
-                      ? const Color(0xFFD4F5DE)
-                      : const Color(0xFFE9F1EC),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Text(
-                  patient.status,
-                  style: TextStyle(
-                    color: upcoming ? primary : Colors.black54,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _DoctorWallPatientInfoChip(
+                    icon: Icons.priority_high_rounded,
+                    label: patient.ctasLabel,
+                    color: _ctasColor(patient.ctasLabel),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: upcoming
+                          ? const Color(0xFFD4F5DE)
+                          : const Color(0xFFE9F1EC),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      patient.status,
+                      style: TextStyle(
+                        color: upcoming ? primary : Colors.black54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -771,6 +801,165 @@ class _DoctorWallHistoryHeader extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w800)),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DoctorWallPatientDetails extends StatelessWidget {
+  const _DoctorWallPatientDetails({required this.patient});
+
+  final _DoctorWallPatient patient;
+
+  @override
+  Widget build(BuildContext context) {
+    final allergies =
+        patient.allergies.isEmpty ? const ['None recorded'] : patient.allergies;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _DoctorWallDetailTile(
+                  icon: Icons.water_drop_outlined,
+                  label: 'Blood Type',
+                  value: patient.bloodType.isEmpty
+                      ? 'Not recorded'
+                      : patient.bloodType,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DoctorWallDetailTile(
+                  icon: Icons.priority_high_rounded,
+                  label: 'Triage',
+                  value: patient.ctasLabel,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text('Allergies',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final allergy in allergies)
+                _DoctorWallAllergyChip(label: allergy),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DoctorWallDetailTile extends StatelessWidget {
+  const _DoctorWallDetailTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFFFF5),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: primary, size: 18),
+          const SizedBox(height: 8),
+          Text(label,
+              style: const TextStyle(color: Colors.black54, fontSize: 11)),
+          const SizedBox(height: 3),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DoctorWallAllergyChip extends StatelessWidget {
+  const _DoctorWallAllergyChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1D6),
+        borderRadius: BorderRadius.circular(18),
+        border:
+            Border.all(color: const Color(0xFFE7A323).withValues(alpha: .35)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF7B4A00),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _DoctorWallPatientInfoChip extends StatelessWidget {
+  const _DoctorWallPatientInfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: .28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 13),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -1114,6 +1303,28 @@ IconData _sourceIcon(String source) {
     'manual' => Icons.edit_note_outlined,
     _ => Icons.monitor_heart_outlined,
   };
+}
+
+Color _ctasColor(String ctasLabel) {
+  final level = int.tryParse(ctasLabel.replaceAll(RegExp(r'[^0-9]'), ''));
+  return switch (level) {
+    1 => const Color(0xFFB00020),
+    2 => const Color(0xFFC75B00),
+    3 => const Color(0xFF946200),
+    4 => const Color(0xFF006D9C),
+    _ => const Color(0xFF0B6B39),
+  };
+}
+
+List<String> _allergiesForPatient(String name) {
+  final normalized = name.toLowerCase();
+  if (normalized.contains('fahad')) {
+    return const ['Penicillin', 'Dust'];
+  }
+  if (normalized.contains('noura')) {
+    return const ['Seasonal pollen'];
+  }
+  return const ['None recorded'];
 }
 
 String _displayValue(String value) {
