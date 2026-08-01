@@ -123,14 +123,6 @@ class _AdminShellState extends State<AdminShell> {
                 ],
               ),
               const SizedBox(height: 24),
-              const _AdminSectionTitle('Doctor reviews'),
-              const SizedBox(height: 10),
-              if (data.reviews.isEmpty)
-                const _AdminPlainCard('No doctor reviews submitted yet.')
-              else
-                for (final review in data.reviews.take(5))
-                  _AdminDoctorReviewCard(review: review),
-              const SizedBox(height: 24),
               const _AdminSectionTitle('Doctors'),
               const SizedBox(height: 10),
               if (data.doctors.isEmpty)
@@ -148,6 +140,9 @@ class _AdminShellState extends State<AdminShell> {
                           appointments:
                               data.appointmentsByDoctor[doctor.id] ?? const [],
                           patients: data.patients,
+                          reviews: data.reviews
+                              .where((review) => review.doctorId == doctor.id)
+                              .toList(),
                         ),
                       ),
                     ),
@@ -429,11 +424,13 @@ class _AdminDoctorPatientsScreen extends StatelessWidget {
     required this.doctor,
     required this.appointments,
     required this.patients,
+    required this.reviews,
   });
 
   final BackendDoctor doctor;
   final List<BackendAppointment> appointments;
   final List<BackendPatient> patients;
+  final List<BackendDoctorReview> reviews;
 
   @override
   Widget build(BuildContext context) {
@@ -494,6 +491,14 @@ class _AdminDoctorPatientsScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          const _AdminSectionTitle('Doctor reviews'),
+          const SizedBox(height: 10),
+          if (reviews.isEmpty)
+            const _AdminPlainCard('No reviews for this doctor yet.')
+          else
+            for (final review in reviews.take(5))
+              _AdminDoctorReviewCard(review: review),
           const SizedBox(height: 20),
           const _AdminSectionTitle('Patients'),
           const SizedBox(height: 10),
