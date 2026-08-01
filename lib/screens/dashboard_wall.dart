@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
@@ -295,8 +297,30 @@ class _DoctorWallHome extends StatefulWidget {
 
 class _DoctorWallHomeState extends State<_DoctorWallHome> {
   final Set<String> _startedPatientIds = <String>{};
+  final Set<String> _knownCheckedInKeys = <String>{};
   bool _savingFinish = false;
+  bool _pollingCheckIns = false;
+  int _checkedRefreshToken = 0;
+  Timer? _checkInTimer;
   _DoctorWallPatient? _completionPatient;
+  _DoctorWallPatient? _checkedInNotificationPatient;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _pollCheckIns(notify: false);
+    });
+    _checkInTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _pollCheckIns();
+    });
+  }
+
+  @override
+  void dispose() {
+    _checkInTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -369,6 +393,20 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
                     ),
                   ],
                 ),
+                if (_checkedInNotificationPatient != null) ...[
+                  const SizedBox(height: 16),
+                  _DoctorWallCheckInNotification(
+                    patient: _checkedInNotificationPatient!,
+                    onTap: () {
+                      final patient = _checkedInNotificationPatient;
+                      if (patient == null) return;
+                      setState(() => _checkedInNotificationPatient = null);
+                      widget.onOpenHistory(patient);
+                    },
+                    onDismiss: () =>
+                        setState(() => _checkedInNotificationPatient = null),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -434,6 +472,7 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
                   patients: upcoming,
                   startedPatientIds: _startedPatientIds,
                   savingFinish: _savingFinish,
+                  refreshToken: _checkedRefreshToken,
                   onStart: (patient) {
                     setState(() => _startedPatientIds.add(patient.queueKey));
                   },
@@ -572,6 +611,55 @@ class _DoctorWallHomeState extends State<_DoctorWallHome> {
     } finally {
       if (mounted) setState(() => _savingFinish = false);
     }
+  }
+
+  Future<void> _pollCheckIns({bool notify = true}) async {
+    if (_pollingCheckIns) return;
+    final patients = _currentQueuePatients();
+    if (patients.isEmpty) return;
+
+    _pollingCheckIns = true;
+    var changed = false;
+    _DoctorWallPatient? newlyCheckedIn;
+    try {
+      for (final patient in patients) {
+        if (patient.patientId.isEmpty) continue;
+        final vitals = await BackendApi.listVitals(
+          patientId: patient.patientId,
+          appointmentId: patient.appointmentId,
+        );
+        final checkedIn = _isPatientCheckedIn(vitals);
+        final known = _knownCheckedInKeys.contains(patient.queueKey);
+        if (checkedIn && !known) {
+          _knownCheckedInKeys.add(patient.queueKey);
+          changed = true;
+          newlyCheckedIn ??= patient;
+        } else if (!checkedIn && known) {
+          _knownCheckedInKeys.remove(patient.queueKey);
+          changed = true;
+        }
+      }
+    } catch (_) {
+      // Keep the current UI state if the short polling request fails.
+    } finally {
+      _pollingCheckIns = false;
+    }
+
+    if (!mounted || !changed) return;
+    setState(() {
+      _checkedRefreshToken++;
+      if (notify && newlyCheckedIn != null) {
+        _checkedInNotificationPatient = newlyCheckedIn;
+      }
+    });
+  }
+
+  List<_DoctorWallPatient> _currentQueuePatients() {
+    final data = widget.data;
+    final patients = data.appointments.isNotEmpty
+        ? data.appointments.map(_patientFromAppointment).toList()
+        : data.fallbackPatients.map(_patientFromProfile).toList();
+    return patients.where((patient) => patient.status == 'Upcoming').toList();
   }
 }
 
@@ -1127,11 +1215,81 @@ class _DoctorWallMetric extends StatelessWidget {
   }
 }
 
+class _DoctorWallCheckInNotification extends StatelessWidget {
+  const _DoctorWallCheckInNotification({
+    required this.patient,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  final _DoctorWallPatient patient;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Material(
+      color: primary,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.white.withValues(alpha: .18),
+                child: const Icon(
+                  Icons.notifications_active_outlined,
+                  color: Colors.white,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Patient checked in',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${patient.name} - tap to review medical history',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DoctorWallQueuePanel extends StatefulWidget {
   const _DoctorWallQueuePanel({
     required this.patients,
     required this.startedPatientIds,
     required this.savingFinish,
+    required this.refreshToken,
     required this.onStart,
     required this.onComplete,
     required this.onOpenHistory,
@@ -1140,6 +1298,7 @@ class _DoctorWallQueuePanel extends StatefulWidget {
   final List<_DoctorWallPatient> patients;
   final Set<String> startedPatientIds;
   final bool savingFinish;
+  final int refreshToken;
   final ValueChanged<_DoctorWallPatient> onStart;
   final ValueChanged<_DoctorWallPatient> onComplete;
   final ValueChanged<_DoctorWallPatient> onOpenHistory;
@@ -1155,10 +1314,9 @@ class _DoctorWallQueuePanelState extends State<_DoctorWallQueuePanel> {
   void didUpdateWidget(covariant _DoctorWallQueuePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     final oldIds =
-        oldWidget.patients.map((patient) => patient.patientId).join('|');
-    final newIds =
-        widget.patients.map((patient) => patient.patientId).join('|');
-    if (oldIds != newIds) {
+        oldWidget.patients.map((patient) => patient.queueKey).join('|');
+    final newIds = widget.patients.map((patient) => patient.queueKey).join('|');
+    if (oldIds != newIds || oldWidget.refreshToken != widget.refreshToken) {
       _checkedFuture = _loadCheckedStates();
     }
   }
