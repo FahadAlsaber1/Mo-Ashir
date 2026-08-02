@@ -396,7 +396,7 @@ class BackendThermalCameraStatus {
 class BackendApi {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
+    defaultValue: 'http://172.20.10.2:8000',
   );
   static const Duration _requestTimeout = Duration(seconds: 60);
 
