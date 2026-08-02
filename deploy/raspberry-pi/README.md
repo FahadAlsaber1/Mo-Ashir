@@ -1,9 +1,9 @@
-# Raspberry Pi Thermal Camera Auto-Start
+# Raspberry Pi Thermal Camera Control
 
-Use this to start the MO'ASHIR thermal camera bridge automatically whenever the Raspberry Pi boots.
-The backend also turns the thermal camera stream/window back on when it starts.
-Temperature is still only captured and saved after pressing the thermal camera
-button in the hospital station screen.
+The hospital dashboard sends on/off commands through Supabase. The Raspberry Pi
+agent polls those commands, controls the local camera systemd service, and sends
+the actual state and a heartbeat back to the dashboard. The Pi only needs an
+outbound internet connection; no public port or inbound tunnel is required.
 
 ## Install
 
@@ -24,13 +24,17 @@ sudo nano /etc/moashir/thermal-camera.env
 ```
 
 Set `MOASHIR_THERMAL_CAMERA_COMMAND` to the real command that starts your thermal camera bridge.
-Set `MOASHIR_THERMAL_CAMERA_AUTOSTART=0` only if you do not want the backend to
-turn the camera window back on after reboot.
+Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to the same project used by
+the DigitalOcean backend. Keep the service-role key only in this root-owned file.
+Use the same `MOASHIR_THERMAL_CAMERA_DEVICE_ID` in DigitalOcean and on the Pi.
 
 Example:
 
 ```sh
 MOASHIR_THERMAL_CAMERA_COMMAND="python3 /opt/moashir/thermal_camera_bridge.py --host 0.0.0.0 --port 9000"
+SUPABASE_URL="https://your-project-ref.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+MOASHIR_THERMAL_CAMERA_DEVICE_ID="hospital-main"
 ```
 
 The bridge endpoint must return JSON like:
@@ -46,15 +50,15 @@ The bridge endpoint must return JSON like:
 ## Check Status
 
 ```sh
-sudo systemctl status moashir-thermal-camera.service
-journalctl -u moashir-thermal-camera.service -f
+sudo systemctl status moashir-thermal-camera-agent.service
+journalctl -u moashir-thermal-camera-agent.service -f
 ```
 
 ## Stop Or Restart
 
 ```sh
-sudo systemctl restart moashir-thermal-camera.service
-sudo systemctl stop moashir-thermal-camera.service
+sudo systemctl restart moashir-thermal-camera-agent.service
+sudo systemctl stop moashir-thermal-camera-agent.service
 ```
 
 ## Connect Flutter
@@ -66,3 +70,7 @@ flutter build web --release --dart-define=THERMAL_CAMERA_API_URL=http://RASPBERR
 ```
 
 Replace `RASPBERRY_PI_IP` with the Pi address on the hospital network.
+
+The camera bridge remains off after boot until the hospital dashboard sends an
+on command. Heartbeats are published every two seconds, and the dashboard marks
+the station offline after 20 seconds without a heartbeat.

@@ -368,11 +368,17 @@ class BackendThermalCameraStatus {
     required this.running,
     required this.streamUrl,
     required this.message,
+    required this.online,
+    required this.commandPending,
+    required this.desiredState,
   });
 
   final bool running;
   final String streamUrl;
   final String message;
+  final bool online;
+  final bool commandPending;
+  final String desiredState;
 
   factory BackendThermalCameraStatus.fromJson(Map<String, dynamic> json) {
     return BackendThermalCameraStatus(
@@ -380,6 +386,9 @@ class BackendThermalCameraStatus {
       streamUrl:
           _string(json['stream_url'], fallback: 'http://172.20.10.2:5000'),
       message: _string(json['message']),
+      online: json['online'] == true,
+      commandPending: json['command_pending'] == true,
+      desiredState: _string(json['desired_state'], fallback: 'off'),
     );
   }
 }

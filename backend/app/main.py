@@ -12,8 +12,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +44,11 @@ _THERMAL_CAMERA_AUTOSTART = os.environ.get(
     "MOASHIR_THERMAL_CAMERA_AUTOSTART",
     "0",
 ).strip().lower() not in {"0", "false", "no", "off"}
+_THERMAL_CAMERA_DEVICE_ID = os.environ.get(
+    "MOASHIR_THERMAL_CAMERA_DEVICE_ID",
+    "hospital-main",
+).strip() or "hospital-main"
+_THERMAL_CAMERA_HEARTBEAT_STALE_SECONDS = 20
 
 
 def _cors_origins() -> list[str]:
@@ -82,7 +85,8 @@ app.add_middleware(
 @app.on_event("startup")
 def autostart_thermal_camera() -> None:
     if not _THERMAL_CAMERA_AUTOSTART:
-        _mark_thermal_camera_disabled()
+        if _thermal_camera_process_management_available():
+            _mark_thermal_camera_disabled()
         return
     if _thermal_camera_pids(include_blocked=True):
         return
@@ -224,11 +228,9 @@ def thermal_camera_status() -> dict[str, Any]:
 @app.post("/api/thermal-camera/start")
 def start_thermal_camera() -> dict[str, Any]:
     if not _thermal_camera_process_management_available():
-        if _thermal_camera_remote_is_reachable():
-            return _thermal_camera_payload(message="Thermal camera is already on.")
-        raise HTTPException(
-            status_code=409,
-            detail="Thermal camera must be started on the Raspberry Pi camera host.",
+        return _queue_thermal_camera_command(
+            "on",
+            message="Turn-on command sent to the thermal camera station.",
         )
 
     if _thermal_camera_pids():
@@ -257,9 +259,9 @@ def start_thermal_camera() -> dict[str, Any]:
 @app.post("/api/thermal-camera/stop")
 def stop_thermal_camera() -> dict[str, Any]:
     if not _thermal_camera_process_management_available():
-        raise HTTPException(
-            status_code=409,
-            detail="Thermal camera must be stopped on the Raspberry Pi camera host.",
+        return _queue_thermal_camera_command(
+            "off",
+            message="Turn-off command sent to the thermal camera station.",
         )
 
     try:
@@ -1855,22 +1857,140 @@ def _public_account(account: dict[str, Any]) -> dict[str, Any]:
 
 
 def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
+    if not _thermal_camera_process_management_available():
+        return _thermal_camera_database_payload(message=message)
+
     pids = _thermal_camera_pids()
-    marker_exists = _THERMAL_CAMERA_DISABLED_MARKER.exists()
-    remote_reachable = bool(pids) or (
-        not marker_exists and _thermal_camera_remote_is_reachable()
-    )
+    running = bool(pids)
     return {
-        "running": remote_reachable,
+        "running": running,
         "pids": pids,
         "stream_url": _THERMAL_CAMERA_STREAM_URL,
-        "message": message
-        or (
-            "Thermal camera is on."
-            if remote_reachable
-            else "Thermal camera is off."
+        "online": True,
+        "command_pending": False,
+        "desired_state": "on" if running else "off",
+        "last_seen": datetime.now(timezone.utc).isoformat(),
+        "message": message or (
+            "Thermal camera is on." if running else "Thermal camera is off."
         ),
     }
+
+
+def _thermal_camera_database_payload(
+    message: str | None = None,
+) -> dict[str, Any]:
+    client = _service_client()
+    try:
+        device_response = (
+            client.table("thermal_camera_devices")
+            .select("device_id, actual_state, last_seen, last_error")
+            .eq("device_id", _THERMAL_CAMERA_DEVICE_ID)
+            .limit(1)
+            .execute()
+        )
+        command_response = (
+            client.table("thermal_camera_commands")
+            .select("id, desired_state, status, requested_at, error_message")
+            .eq("device_id", _THERMAL_CAMERA_DEVICE_ID)
+            .order("requested_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Thermal camera command tables are unavailable. Apply the latest "
+                "Supabase migration."
+            ),
+        ) from exc
+
+    device = device_response.data[0] if device_response.data else {}
+    command = command_response.data[0] if command_response.data else {}
+    last_seen = device.get("last_seen")
+    online = _thermal_camera_heartbeat_is_fresh(last_seen)
+    actual_state = str(device.get("actual_state") or "unknown")
+    command_status = str(command.get("status") or "")
+    command_pending = command_status in {"pending", "processing"}
+    desired_state = (
+        str(command.get("desired_state") or "off")
+        if command_pending
+        else (actual_state if actual_state in {"on", "off"} else "off")
+    )
+    running = online and actual_state == "on"
+
+    if message is None:
+        if command_pending:
+            action = "on" if desired_state == "on" else "off"
+            message = f"Thermal camera turn-{action} command is pending."
+        elif not online:
+            message = "Thermal camera station is offline."
+        elif actual_state == "error":
+            message = str(device.get("last_error") or "Thermal camera reported an error.")
+        else:
+            message = (
+                "Thermal camera is on."
+                if running
+                else "Thermal camera is off."
+            )
+
+    return {
+        "running": running,
+        "pids": [],
+        "stream_url": _THERMAL_CAMERA_STREAM_URL,
+        "online": online,
+        "command_pending": command_pending,
+        "desired_state": desired_state,
+        "last_seen": last_seen,
+        "message": message,
+    }
+
+
+def _queue_thermal_camera_command(
+    desired_state: str,
+    *,
+    message: str,
+) -> dict[str, Any]:
+    client = _service_client()
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        client.table("thermal_camera_commands").update(
+            {
+                "status": "superseded",
+                "acknowledged_at": now,
+                "error_message": "Replaced by a newer dashboard command.",
+            }
+        ).eq("device_id", _THERMAL_CAMERA_DEVICE_ID).eq(
+            "status", "pending"
+        ).execute()
+        client.table("thermal_camera_commands").insert(
+            {
+                "device_id": _THERMAL_CAMERA_DEVICE_ID,
+                "desired_state": desired_state,
+                "status": "pending",
+                "requested_at": now,
+            }
+        ).execute()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not queue the thermal camera command in Supabase.",
+        ) from exc
+
+    return _thermal_camera_database_payload(message=message)
+
+
+def _thermal_camera_heartbeat_is_fresh(value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        seen_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if seen_at.tzinfo is None:
+        seen_at = seen_at.replace(tzinfo=timezone.utc)
+    elapsed = datetime.now(timezone.utc) - seen_at.astimezone(timezone.utc)
+    return 0 <= elapsed.total_seconds() <= _THERMAL_CAMERA_HEARTBEAT_STALE_SECONDS
 
 
 def _start_thermal_camera_process() -> None:
@@ -1929,21 +2049,6 @@ def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
 
 def _thermal_camera_process_management_available() -> bool:
     return Path("/proc").is_dir() and _THERMAL_CAMERA_SCRIPT.is_file()
-
-
-def _thermal_camera_remote_is_reachable() -> bool:
-    request = Request(
-        _THERMAL_CAMERA_STREAM_URL,
-        headers={"User-Agent": "MoAshir-Thermal-Camera-Status/1.0"},
-    )
-    try:
-        with urlopen(request, timeout=2):
-            return True
-    except HTTPError:
-        # An HTTP response, including 404, proves that the camera server is up.
-        return True
-    except (URLError, OSError, ValueError):
-        return False
 
 
 def _thermal_camera_process_is_manual(proc_path: Path) -> bool:

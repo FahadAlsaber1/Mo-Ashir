@@ -1,0 +1,15 @@
+[Unit]
+Description=MO'ASHIR thermal camera command agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/moashir/thermal-camera.env
+ExecStart=/usr/bin/python3 /opt/moashir/raspberry-pi/thermal_camera_agent.py
+Restart=always
+RestartSec=5
+WorkingDirectory=/opt/moashir
+
+[Install]
+WantedBy=multi-user.target

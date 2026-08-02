@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
@@ -240,12 +242,23 @@ class _ThermalCameraControlCard extends StatefulWidget {
 
 class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
   late Future<BackendThermalCameraStatus> _statusFuture;
+  Timer? _refreshTimer;
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _statusFuture = BackendApi.getThermalCameraStatus();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || _busy) return;
+      setState(() => _statusFuture = BackendApi.getThermalCameraStatus());
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _toggle(BackendThermalCameraStatus status) async {
@@ -282,14 +295,26 @@ class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
       builder: (context, snapshot) {
         final status = snapshot.data;
         final running = status?.running == true;
-        final loading =
-            snapshot.connectionState == ConnectionState.waiting || _busy;
+        final commandPending = status?.commandPending == true;
+        final loading = snapshot.connectionState == ConnectionState.waiting ||
+            _busy ||
+            commandPending;
         final statusText = snapshot.hasError
             ? 'Status unavailable'
+            : commandPending
+                ? status?.desiredState == 'on'
+                    ? 'Turning thermal camera on...'
+                    : 'Turning thermal camera off...'
+                : status?.online != true
+                    ? 'Thermal camera station is offline'
+                    : running
+                        ? 'Thermal camera is on'
+                        : 'Thermal camera is off';
+        final statusColor = commandPending
+            ? const Color(0xFF9A6700)
             : running
-                ? 'Thermal camera is on'
-                : 'Thermal camera is off';
-        final statusColor = running ? const Color(0xFF167A3A) : Colors.black54;
+                ? const Color(0xFF167A3A)
+                : Colors.black54;
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -353,9 +378,11 @@ class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
                               : Icons.play_arrow_rounded,
                         ),
                   label: Text(
-                    running
-                        ? 'Turn thermal camera off'
-                        : 'Turn thermal camera on',
+                    commandPending
+                        ? 'Command pending'
+                        : running
+                            ? 'Turn thermal camera off'
+                            : 'Turn thermal camera on',
                   ),
                 ),
               ),
