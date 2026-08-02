@@ -1,6 +1,9 @@
 # Raspberry Pi Thermal Camera Auto-Start
 
 Use this to start the MO'ASHIR thermal camera bridge automatically whenever the Raspberry Pi boots.
+The backend also turns the thermal camera stream/window back on when it starts.
+Temperature is still only captured and saved after pressing the thermal camera
+button in the hospital station screen.
 
 ## Install
 
@@ -21,6 +24,8 @@ sudo nano /etc/moashir/thermal-camera.env
 ```
 
 Set `MOASHIR_THERMAL_CAMERA_COMMAND` to the real command that starts your thermal camera bridge.
+Set `MOASHIR_THERMAL_CAMERA_AUTOSTART=0` only if you do not want the backend to
+turn the camera window back on after reboot.
 
 Example:
 

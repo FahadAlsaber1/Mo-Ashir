@@ -40,6 +40,10 @@ _THERMAL_CAMERA_STREAM_URL = os.environ.get(
     "MOASHIR_THERMAL_CAMERA_STREAM_URL",
     "http://172.20.10.2:5000",
 )
+_THERMAL_CAMERA_AUTOSTART = os.environ.get(
+    "MOASHIR_THERMAL_CAMERA_AUTOSTART",
+    "1",
+).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _cors_origins() -> list[str]:
@@ -71,6 +75,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def autostart_thermal_camera() -> None:
+    if not _THERMAL_CAMERA_AUTOSTART:
+        return
+    if _thermal_camera_pids(include_blocked=True):
+        _clear_thermal_camera_disabled_marker()
+        return
+    if not _THERMAL_CAMERA_SCRIPT.exists():
+        return
+    try:
+        _start_thermal_camera_process()
+    except Exception:
+        # Do not block the API from starting if the Pi camera is unavailable.
+        return
 
 
 class RegisterRequest(BaseModel):
@@ -201,6 +221,7 @@ def thermal_camera_status() -> dict[str, Any]:
 
 @app.post("/api/thermal-camera/start")
 def start_thermal_camera() -> dict[str, Any]:
+    _clear_thermal_camera_disabled_marker()
     if _thermal_camera_pids():
         return _thermal_camera_payload(message="Thermal camera is already on.")
     if not _THERMAL_CAMERA_SCRIPT.exists():
@@ -210,19 +231,7 @@ def start_thermal_camera() -> dict[str, Any]:
         )
 
     try:
-        _THERMAL_CAMERA_LOG.parent.mkdir(parents=True, exist_ok=True)
-        log_file = _THERMAL_CAMERA_LOG.open("ab")
-        env = os.environ.copy()
-        env["MOASHIR_THERMAL_CAMERA_MANUAL"] = "1"
-        subprocess.Popen(
-            ["python3", str(_THERMAL_CAMERA_SCRIPT)],
-            cwd=str(_THERMAL_CAMERA_SCRIPT.parent),
-            env=env,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        _start_thermal_camera_process()
     except Exception as exc:
         raise HTTPException(
             status_code=503,
@@ -1838,6 +1847,30 @@ def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
         "stream_url": _THERMAL_CAMERA_STREAM_URL,
         "message": message or ("Thermal camera is on." if pids else "Thermal camera is off."),
     }
+
+
+def _start_thermal_camera_process() -> None:
+    _clear_thermal_camera_disabled_marker()
+    _THERMAL_CAMERA_LOG.parent.mkdir(parents=True, exist_ok=True)
+    log_file = _THERMAL_CAMERA_LOG.open("ab")
+    env = os.environ.copy()
+    env["MOASHIR_THERMAL_CAMERA_MANUAL"] = "1"
+    subprocess.Popen(
+        ["python3", str(_THERMAL_CAMERA_SCRIPT)],
+        cwd=str(_THERMAL_CAMERA_SCRIPT.parent),
+        env=env,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _clear_thermal_camera_disabled_marker() -> None:
+    try:
+        _THERMAL_CAMERA_DISABLED_MARKER.unlink(missing_ok=True)
+    except OSError:
+        return
 
 
 def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
