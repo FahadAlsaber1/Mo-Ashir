@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
 import '../services/backend_api.dart';
+import 'thermal_camera_feed_stub.dart'
+    if (dart.library.html) 'thermal_camera_feed_web.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -386,6 +388,22 @@ class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
                   ),
                 ),
               ),
+              if (running) ...[
+                const SizedBox(height: 14),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF101418),
+                        border: Border.all(color: const Color(0xFFE3E7EA)),
+                      ),
+                      child: ThermalCameraFeed(streamUrl: status!.streamUrl),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         );
