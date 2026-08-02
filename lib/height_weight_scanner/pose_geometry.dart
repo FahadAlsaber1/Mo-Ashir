@@ -199,7 +199,7 @@ class PoseGeometry {
     }
 
     final bodyHeight = bottomY - topY;
-    if (bodyHeight > height * 0.85) {
+    if (bodyHeight > height * 0.92) {
       return PoseObservation(
         valid: false,
         reason: 'Step farther away',

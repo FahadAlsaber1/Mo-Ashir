@@ -97,7 +97,7 @@ class MeasurementValidationResult {
 class MeasurementValidator {
   static const landmarkConfidenceThreshold = 0.70;
   static const minBodyHeightRatio = 0.65;
-  static const maxBodyHeightRatio = 0.85;
+  static const maxBodyHeightRatio = 0.92;
   static const requiredStableDuration = Duration(milliseconds: 1500);
   static const minAdultHeightCm = 100.0;
   static const maxAdultHeightCm = 230.0;
@@ -117,7 +117,7 @@ class MeasurementValidator {
     if (!input.landmarkConfidencePassed) {
       return _invalid(
         BodyValidationCode.bodyOutsideFrame,
-        'Stand 2-3 metres from the camera',
+        'Stand 1-2 metres from the camera',
       );
     }
     if (!input.headVisible || !input.hasSpaceAboveHead) {

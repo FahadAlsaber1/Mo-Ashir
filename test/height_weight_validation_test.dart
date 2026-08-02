@@ -53,6 +53,25 @@ void main() {
       expect(result.captureAllowed, isTrue);
       expect(result.message, 'Full body detected');
     });
+
+    test('closer full body position is accepted', () {
+      final result = MeasurementValidator.validateBodyFrame(
+        _body(bodyHeightRatio: .90),
+      );
+
+      expect(result.captureAllowed, isTrue);
+      expect(result.message, 'Full body detected');
+    });
+
+    test('body that nearly fills the frame still asks user to move farther',
+        () {
+      final result = MeasurementValidator.validateBodyFrame(
+        _body(bodyHeightRatio: .94),
+      );
+
+      expect(result.captureAllowed, isFalse);
+      expect(result.message, 'Move farther from the camera');
+    });
   });
 
   group('measurement result validation', () {
