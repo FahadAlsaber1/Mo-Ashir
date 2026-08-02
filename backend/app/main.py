@@ -44,7 +44,7 @@ _THERMAL_CAMERA_STREAM_URL = os.environ.get(
 )
 _THERMAL_CAMERA_AUTOSTART = os.environ.get(
     "MOASHIR_THERMAL_CAMERA_AUTOSTART",
-    "1",
+    "0",
 ).strip().lower() not in {"0", "false", "no", "off"}
 
 
@@ -82,9 +82,9 @@ app.add_middleware(
 @app.on_event("startup")
 def autostart_thermal_camera() -> None:
     if not _THERMAL_CAMERA_AUTOSTART:
+        _mark_thermal_camera_disabled()
         return
     if _thermal_camera_pids(include_blocked=True):
-        _clear_thermal_camera_disabled_marker()
         return
     if not _THERMAL_CAMERA_SCRIPT.exists():
         return
@@ -231,7 +231,6 @@ def start_thermal_camera() -> dict[str, Any]:
             detail="Thermal camera must be started on the Raspberry Pi camera host.",
         )
 
-    _clear_thermal_camera_disabled_marker()
     if _thermal_camera_pids():
         return _thermal_camera_payload(message="Thermal camera is already on.")
     if not _THERMAL_CAMERA_SCRIPT.exists():
@@ -264,7 +263,7 @@ def stop_thermal_camera() -> dict[str, Any]:
         )
 
     try:
-        _THERMAL_CAMERA_DISABLED_MARKER.write_text("off\n", encoding="utf-8")
+        _mark_thermal_camera_disabled()
     except Exception as exc:
         raise HTTPException(
             status_code=503,
@@ -1857,7 +1856,10 @@ def _public_account(account: dict[str, Any]) -> dict[str, Any]:
 
 def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
     pids = _thermal_camera_pids()
-    remote_reachable = bool(pids) or _thermal_camera_remote_is_reachable()
+    marker_exists = _THERMAL_CAMERA_DISABLED_MARKER.exists()
+    remote_reachable = bool(pids) or (
+        not marker_exists and _thermal_camera_remote_is_reachable()
+    )
     return {
         "running": remote_reachable,
         "pids": pids,
@@ -1866,13 +1868,12 @@ def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
         or (
             "Thermal camera is on."
             if remote_reachable
-            else "Thermal camera is off or unreachable."
+            else "Thermal camera is off."
         ),
     }
 
 
 def _start_thermal_camera_process() -> None:
-    _clear_thermal_camera_disabled_marker()
     _THERMAL_CAMERA_LOG.parent.mkdir(parents=True, exist_ok=True)
     log_file = _THERMAL_CAMERA_LOG.open("ab")
     env = os.environ.copy()
@@ -1888,11 +1889,9 @@ def _start_thermal_camera_process() -> None:
     )
 
 
-def _clear_thermal_camera_disabled_marker() -> None:
-    try:
-        _THERMAL_CAMERA_DISABLED_MARKER.unlink(missing_ok=True)
-    except OSError:
-        return
+def _mark_thermal_camera_disabled() -> None:
+    _THERMAL_CAMERA_DISABLED_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    _THERMAL_CAMERA_DISABLED_MARKER.write_text("off\n", encoding="utf-8")
 
 
 def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
