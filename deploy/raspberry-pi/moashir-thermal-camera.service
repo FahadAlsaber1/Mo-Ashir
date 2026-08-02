@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 EnvironmentFile=-/etc/moashir/thermal-camera.env
 ExecStart=/opt/moashir/raspberry-pi/start-thermal-camera.sh
-Restart=always
+Restart=no
 RestartSec=5
 WorkingDirectory=/opt/moashir
 
