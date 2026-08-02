@@ -21,13 +21,32 @@ app = FastAPI(title="MO'ASHIR API", version="0.1.0")
 
 _DOCTOR_REVIEW_PREFIX = "DOCTOR_REVIEW::"
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+
+def _cors_origins() -> list[str]:
+    configured = [
+        origin.strip()
+        for origin in os.environ.get("CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    return [
         "http://127.0.0.1:8000",
         "http://localhost:8000",
-    ],
-    allow_origin_regex=r"http://(127\.0\.0\.1|localhost):\d+",
+        "http://127.0.0.1:8082",
+        "http://localhost:8082",
+        "http://172.20.10.2:8082",
+        *configured,
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_origin_regex=(
+        r"http://(127\.0\.0\.1|localhost|"
+        r"10\.\d+\.\d+\.\d+|"
+        r"172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|"
+        r"192\.168\.\d+\.\d+):\d+"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
