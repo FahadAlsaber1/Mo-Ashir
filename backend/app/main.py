@@ -12,6 +12,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -221,6 +223,14 @@ def thermal_camera_status() -> dict[str, Any]:
 
 @app.post("/api/thermal-camera/start")
 def start_thermal_camera() -> dict[str, Any]:
+    if not _thermal_camera_process_management_available():
+        if _thermal_camera_remote_is_reachable():
+            return _thermal_camera_payload(message="Thermal camera is already on.")
+        raise HTTPException(
+            status_code=503,
+            detail="Thermal camera must be started on the Raspberry Pi camera host.",
+        )
+
     _clear_thermal_camera_disabled_marker()
     if _thermal_camera_pids():
         return _thermal_camera_payload(message="Thermal camera is already on.")
@@ -247,6 +257,12 @@ def start_thermal_camera() -> dict[str, Any]:
 
 @app.post("/api/thermal-camera/stop")
 def stop_thermal_camera() -> dict[str, Any]:
+    if not _thermal_camera_process_management_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Thermal camera must be stopped on the Raspberry Pi camera host.",
+        )
+
     try:
         _THERMAL_CAMERA_DISABLED_MARKER.write_text("off\n", encoding="utf-8")
     except Exception as exc:
@@ -1841,11 +1857,17 @@ def _public_account(account: dict[str, Any]) -> dict[str, Any]:
 
 def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
     pids = _thermal_camera_pids()
+    remote_reachable = bool(pids) or _thermal_camera_remote_is_reachable()
     return {
-        "running": bool(pids),
+        "running": remote_reachable,
         "pids": pids,
         "stream_url": _THERMAL_CAMERA_STREAM_URL,
-        "message": message or ("Thermal camera is on." if pids else "Thermal camera is off."),
+        "message": message
+        or (
+            "Thermal camera is on."
+            if remote_reachable
+            else "Thermal camera is off or unreachable."
+        ),
     }
 
 
@@ -1877,6 +1899,9 @@ def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
     script_path = str(_THERMAL_CAMERA_SCRIPT)
     pids: list[int] = []
     proc_root = Path("/proc")
+    if not proc_root.is_dir():
+        return pids
+
     marker_exists = _THERMAL_CAMERA_DISABLED_MARKER.exists()
     for item in proc_root.iterdir():
         if not item.name.isdigit():
@@ -1901,6 +1926,25 @@ def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
                 continue
             pids.append(int(item.name))
     return sorted(pids)
+
+
+def _thermal_camera_process_management_available() -> bool:
+    return Path("/proc").is_dir()
+
+
+def _thermal_camera_remote_is_reachable() -> bool:
+    request = Request(
+        _THERMAL_CAMERA_STREAM_URL,
+        headers={"User-Agent": "MoAshir-Thermal-Camera-Status/1.0"},
+    )
+    try:
+        with urlopen(request, timeout=2):
+            return True
+    except HTTPError:
+        # An HTTP response, including 404, proves that the camera server is up.
+        return True
+    except (URLError, OSError, ValueError):
+        return False
 
 
 def _thermal_camera_process_is_manual(proc_path: Path) -> bool:
