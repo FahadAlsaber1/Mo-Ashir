@@ -30,6 +30,12 @@ _THERMAL_CAMERA_SCRIPT = Path(
 _THERMAL_CAMERA_LOG = Path(
     os.environ.get("MOASHIR_THERMAL_CAMERA_LOG", "/tmp/mlx90640_stream.log")
 )
+_THERMAL_CAMERA_DISABLED_MARKER = Path(
+    os.environ.get(
+        "MOASHIR_THERMAL_CAMERA_DISABLED_MARKER",
+        "/home/pi/.moashir_thermal_camera_off",
+    )
+)
 _THERMAL_CAMERA_STREAM_URL = os.environ.get(
     "MOASHIR_THERMAL_CAMERA_STREAM_URL",
     "http://172.20.10.2:5000",
@@ -206,9 +212,12 @@ def start_thermal_camera() -> dict[str, Any]:
     try:
         _THERMAL_CAMERA_LOG.parent.mkdir(parents=True, exist_ok=True)
         log_file = _THERMAL_CAMERA_LOG.open("ab")
+        env = os.environ.copy()
+        env["MOASHIR_THERMAL_CAMERA_MANUAL"] = "1"
         subprocess.Popen(
             ["python3", str(_THERMAL_CAMERA_SCRIPT)],
             cwd=str(_THERMAL_CAMERA_SCRIPT.parent),
+            env=env,
             stdout=log_file,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
@@ -229,7 +238,15 @@ def start_thermal_camera() -> dict[str, Any]:
 
 @app.post("/api/thermal-camera/stop")
 def stop_thermal_camera() -> dict[str, Any]:
-    pids = _thermal_camera_pids()
+    try:
+        _THERMAL_CAMERA_DISABLED_MARKER.write_text("off\n", encoding="utf-8")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Could not mark thermal camera off: {exc}",
+        ) from exc
+
+    pids = _thermal_camera_pids(include_blocked=True)
     if not pids:
         return _thermal_camera_payload(message="Thermal camera is already off.")
 
@@ -245,11 +262,11 @@ def stop_thermal_camera() -> dict[str, Any]:
             ) from exc
 
     for _ in range(20):
-        if not _thermal_camera_pids():
+        if not _thermal_camera_pids(include_blocked=True):
             return _thermal_camera_payload(message="Thermal camera turned off.")
         time.sleep(0.1)
 
-    for pid in _thermal_camera_pids():
+    for pid in _thermal_camera_pids(include_blocked=True):
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -1823,10 +1840,11 @@ def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
     }
 
 
-def _thermal_camera_pids() -> list[int]:
+def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
     script_path = str(_THERMAL_CAMERA_SCRIPT)
     pids: list[int] = []
     proc_root = Path("/proc")
+    marker_exists = _THERMAL_CAMERA_DISABLED_MARKER.exists()
     for item in proc_root.iterdir():
         if not item.name.isdigit():
             continue
@@ -1842,8 +1860,22 @@ def _thermal_camera_pids() -> list[int]:
             if part
         ]
         if script_path in parts:
+            if (
+                marker_exists
+                and not include_blocked
+                and not _thermal_camera_process_is_manual(item)
+            ):
+                continue
             pids.append(int(item.name))
     return sorted(pids)
+
+
+def _thermal_camera_process_is_manual(proc_path: Path) -> bool:
+    try:
+        environ = (proc_path / "environ").read_bytes()
+    except (FileNotFoundError, PermissionError, ProcessLookupError):
+        return False
+    return b"MOASHIR_THERMAL_CAMERA_MANUAL=1" in environ.split(b"\0")
 
 
 def _is_demo_admin_login(
