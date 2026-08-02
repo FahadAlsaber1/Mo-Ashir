@@ -6,7 +6,11 @@ import hmac
 import json
 import os
 import re
+import signal
+import subprocess
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -20,6 +24,16 @@ from .supabase_client import get_supabase_client
 app = FastAPI(title="MO'ASHIR API", version="0.1.0")
 
 _DOCTOR_REVIEW_PREFIX = "DOCTOR_REVIEW::"
+_THERMAL_CAMERA_SCRIPT = Path(
+    os.environ.get("MOASHIR_THERMAL_CAMERA_SCRIPT", "/home/pi/mlx90640_stream.py")
+)
+_THERMAL_CAMERA_LOG = Path(
+    os.environ.get("MOASHIR_THERMAL_CAMERA_LOG", "/tmp/mlx90640_stream.log")
+)
+_THERMAL_CAMERA_STREAM_URL = os.environ.get(
+    "MOASHIR_THERMAL_CAMERA_STREAM_URL",
+    "http://172.20.10.2:5000",
+)
 
 
 def _cors_origins() -> list[str]:
@@ -172,6 +186,75 @@ def health() -> dict[str, Any]:
         "service_role_configured": settings.service_role_configured,
         "database_url_configured": settings.database_url_configured,
     }
+
+
+@app.get("/api/thermal-camera/status")
+def thermal_camera_status() -> dict[str, Any]:
+    return _thermal_camera_payload()
+
+
+@app.post("/api/thermal-camera/start")
+def start_thermal_camera() -> dict[str, Any]:
+    if _thermal_camera_pids():
+        return _thermal_camera_payload(message="Thermal camera is already on.")
+    if not _THERMAL_CAMERA_SCRIPT.exists():
+        raise HTTPException(
+            status_code=503,
+            detail=f"Thermal camera script not found: {_THERMAL_CAMERA_SCRIPT}",
+        )
+
+    try:
+        _THERMAL_CAMERA_LOG.parent.mkdir(parents=True, exist_ok=True)
+        log_file = _THERMAL_CAMERA_LOG.open("ab")
+        subprocess.Popen(
+            ["python3", str(_THERMAL_CAMERA_SCRIPT)],
+            cwd=str(_THERMAL_CAMERA_SCRIPT.parent),
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Could not start thermal camera: {exc}",
+        ) from exc
+
+    for _ in range(20):
+        if _thermal_camera_pids():
+            return _thermal_camera_payload(message="Thermal camera turned on.")
+        time.sleep(0.1)
+    return _thermal_camera_payload(message="Thermal camera start requested.")
+
+
+@app.post("/api/thermal-camera/stop")
+def stop_thermal_camera() -> dict[str, Any]:
+    pids = _thermal_camera_pids()
+    if not pids:
+        return _thermal_camera_payload(message="Thermal camera is already off.")
+
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            continue
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not stop thermal camera process {pid}: {exc}",
+            ) from exc
+
+    for _ in range(20):
+        if not _thermal_camera_pids():
+            return _thermal_camera_payload(message="Thermal camera turned off.")
+        time.sleep(0.1)
+
+    for pid in _thermal_camera_pids():
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    return _thermal_camera_payload(message="Thermal camera stopped.")
 
 
 @app.get("/api/doctors")
@@ -1728,6 +1811,39 @@ def _public_account(account: dict[str, Any]) -> dict[str, Any]:
         "mobile": account.get("mobile"),
         "national_id": account.get("national_id"),
     }
+
+
+def _thermal_camera_payload(message: str | None = None) -> dict[str, Any]:
+    pids = _thermal_camera_pids()
+    return {
+        "running": bool(pids),
+        "pids": pids,
+        "stream_url": _THERMAL_CAMERA_STREAM_URL,
+        "message": message or ("Thermal camera is on." if pids else "Thermal camera is off."),
+    }
+
+
+def _thermal_camera_pids() -> list[int]:
+    script_path = str(_THERMAL_CAMERA_SCRIPT)
+    pids: list[int] = []
+    proc_root = Path("/proc")
+    for item in proc_root.iterdir():
+        if not item.name.isdigit():
+            continue
+        try:
+            raw_cmdline = (item / "cmdline").read_bytes()
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            continue
+        if not raw_cmdline:
+            continue
+        parts = [
+            part.decode("utf-8", errors="ignore")
+            for part in raw_cmdline.split(b"\0")
+            if part
+        ]
+        if script_path in parts:
+            pids.append(int(item.name))
+    return sorted(pids)
 
 
 def _is_demo_admin_login(

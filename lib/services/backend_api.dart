@@ -363,6 +363,27 @@ class BackendDoctorReview {
   }
 }
 
+class BackendThermalCameraStatus {
+  const BackendThermalCameraStatus({
+    required this.running,
+    required this.streamUrl,
+    required this.message,
+  });
+
+  final bool running;
+  final String streamUrl;
+  final String message;
+
+  factory BackendThermalCameraStatus.fromJson(Map<String, dynamic> json) {
+    return BackendThermalCameraStatus(
+      running: json['running'] == true,
+      streamUrl:
+          _string(json['stream_url'], fallback: 'http://172.20.10.2:5000'),
+      message: _string(json['message']),
+    );
+  }
+}
+
 class BackendApi {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -455,6 +476,30 @@ class BackendApi {
         .whereType<Map<String, dynamic>>()
         .map(BackendDoctor.fromJson)
         .toList();
+  }
+
+  static Future<BackendThermalCameraStatus> getThermalCameraStatus() async {
+    final data = await _get('/api/thermal-camera/status');
+    if (data is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid thermal camera status response.');
+    }
+    return BackendThermalCameraStatus.fromJson(data);
+  }
+
+  static Future<BackendThermalCameraStatus> startThermalCamera() async {
+    final data = await _post('/api/thermal-camera/start', const {});
+    if (data is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid thermal camera start response.');
+    }
+    return BackendThermalCameraStatus.fromJson(data);
+  }
+
+  static Future<BackendThermalCameraStatus> stopThermalCamera() async {
+    final data = await _post('/api/thermal-camera/stop', const {});
+    if (data is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid thermal camera stop response.');
+    }
+    return BackendThermalCameraStatus.fromJson(data);
   }
 
   static Future<List<BackendPatient>> listPatients() async {

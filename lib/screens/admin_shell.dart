@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
 import '../services/backend_api.dart';
+import 'hospital_station.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -123,6 +124,8 @@ class _AdminShellState extends State<AdminShell> {
                 ],
               ),
               const SizedBox(height: 24),
+              const _ThermalCameraControlCard(),
+              const SizedBox(height: 24),
               const _AdminSectionTitle('Doctors'),
               const SizedBox(height: 10),
               if (data.doctors.isEmpty)
@@ -224,6 +227,172 @@ class _AdminSectionTitle extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+    );
+  }
+}
+
+class _ThermalCameraControlCard extends StatefulWidget {
+  const _ThermalCameraControlCard();
+
+  @override
+  State<_ThermalCameraControlCard> createState() =>
+      _ThermalCameraControlCardState();
+}
+
+class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
+  late Future<BackendThermalCameraStatus> _statusFuture;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _statusFuture = BackendApi.getThermalCameraStatus();
+  }
+
+  Future<void> _toggle(BackendThermalCameraStatus status) async {
+    setState(() => _busy = true);
+    try {
+      final updated = status.running
+          ? await BackendApi.stopThermalCamera()
+          : await BackendApi.startThermalCamera();
+      if (!mounted) return;
+      setState(() {
+        _statusFuture = Future.value(updated);
+        _busy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(updated.message)),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _statusFuture = BackendApi.getThermalCameraStatus();
+        _busy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Thermal camera control failed: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return FutureBuilder<BackendThermalCameraStatus>(
+      future: _statusFuture,
+      builder: (context, snapshot) {
+        final status = snapshot.data;
+        final running = status?.running == true;
+        final loading =
+            snapshot.connectionState == ConnectionState.waiting || _busy;
+        final statusText = snapshot.hasError
+            ? 'Status unavailable'
+            : running
+                ? 'Thermal camera is on'
+                : 'Thermal camera is off';
+        final statusColor = running ? const Color(0xFF167A3A) : Colors.black54;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.thermostat_outlined, color: primary),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Thermal camera',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh',
+                    onPressed: loading
+                        ? null
+                        : () => setState(
+                              () => _statusFuture =
+                                  BackendApi.getThermalCameraStatus(),
+                            ),
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    running
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: statusColor,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (status?.streamUrl.isNotEmpty == true) ...[
+                const SizedBox(height: 6),
+                Text(
+                  status!.streamUrl,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: loading || status == null
+                          ? null
+                          : () => _toggle(status),
+                      icon: loading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              running
+                                  ? Icons.power_settings_new
+                                  : Icons.play_arrow_rounded,
+                            ),
+                      label: Text(running ? 'Turn off' : 'Turn on'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const HospitalStationScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Open station'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
