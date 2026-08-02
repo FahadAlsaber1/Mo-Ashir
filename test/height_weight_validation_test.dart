@@ -56,7 +56,7 @@ void main() {
 
     test('closer full body position is accepted', () {
       final result = MeasurementValidator.validateBodyFrame(
-        _body(bodyHeightRatio: .90),
+        _body(bodyHeightRatio: .95),
       );
 
       expect(result.captureAllowed, isTrue);
@@ -66,7 +66,7 @@ void main() {
     test('body that nearly fills the frame still asks user to move farther',
         () {
       final result = MeasurementValidator.validateBodyFrame(
-        _body(bodyHeightRatio: .94),
+        _body(bodyHeightRatio: .98),
       );
 
       expect(result.captureAllowed, isFalse);

@@ -64,11 +64,11 @@ Future<WebBodyCapture?> captureWebBodyPhotoFromCamera(int cameraId) async {
   final coverage = box.pixelCount / (frameWidth * frameHeight);
   final faceLikely = _faceLikely(data, frameWidth, frameHeight, box);
   final completeBodyLikely = bodyHeightRatio >= .55 &&
-      bodyHeightRatio <= .96 &&
+      bodyHeightRatio <= .985 &&
       bodyWidthRatio >= .06 &&
-      bodyWidthRatio <= .72 &&
+      bodyWidthRatio <= .90 &&
       coverage >= .025 &&
-      coverage <= .55 &&
+      coverage <= .75 &&
       faceLikely &&
       topRatio > .01 &&
       bottomRatio < .985;
@@ -98,7 +98,7 @@ String _messageForBox({
   if (!faceLikely) return 'Center your face in the camera';
   if (topRatio <= .01) return 'Make sure the top of your head is visible';
   if (bottomRatio >= .985) return 'Make sure your feet are visible';
-  if (bodyHeightRatio > .96) return 'Move slightly farther from the camera';
+  if (bodyHeightRatio > .985) return 'Move slightly farther from the camera';
   if (bodyHeightRatio < .55) return 'Move closer to the camera';
   return 'Stand straight and face the camera';
 }

@@ -119,7 +119,7 @@ class _HeightWeightScannerPageState extends State<HeightWeightScannerPage>
   String _status = 'Preparing camera...';
 
   static const _bodyInstruction =
-      'Stand 1-2 metres from the camera. Make sure your full body, including your head and feet, is visible.';
+      'Stand about 0.5-1 metre from the camera. Make sure your full body, including your head and feet, is visible.';
 
   static const _orientations = {
     DeviceOrientation.portraitUp: 0,
@@ -329,7 +329,7 @@ class _HeightWeightScannerPageState extends State<HeightWeightScannerPage>
     if (!_captureAllowed) {
       setState(
         () => _status =
-            'Stand 1-2 metres from the camera. Make sure your full body, including your head and feet, is visible.',
+            'Stand about 0.5-1 metre from the camera. Make sure your full body, including your head and feet, is visible.',
       );
       return;
     }
