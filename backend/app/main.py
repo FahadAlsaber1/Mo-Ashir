@@ -227,7 +227,7 @@ def start_thermal_camera() -> dict[str, Any]:
         if _thermal_camera_remote_is_reachable():
             return _thermal_camera_payload(message="Thermal camera is already on.")
         raise HTTPException(
-            status_code=503,
+            status_code=409,
             detail="Thermal camera must be started on the Raspberry Pi camera host.",
         )
 
@@ -258,7 +258,7 @@ def start_thermal_camera() -> dict[str, Any]:
 def stop_thermal_camera() -> dict[str, Any]:
     if not _thermal_camera_process_management_available():
         raise HTTPException(
-            status_code=503,
+            status_code=409,
             detail="Thermal camera must be stopped on the Raspberry Pi camera host.",
         )
 
@@ -1928,7 +1928,7 @@ def _thermal_camera_pids(*, include_blocked: bool = False) -> list[int]:
 
 
 def _thermal_camera_process_management_available() -> bool:
-    return Path("/proc").is_dir()
+    return Path("/proc").is_dir() and _THERMAL_CAMERA_SCRIPT.is_file()
 
 
 def _thermal_camera_remote_is_reachable() -> bool:

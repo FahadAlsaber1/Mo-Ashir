@@ -1007,7 +1007,17 @@ class BackendApi {
       );
     }
 
-    final decoded = _decodeResponse(response.body);
+    late final dynamic decoded;
+    try {
+      decoded = _decodeResponse(response.body);
+    } on BackendApiException {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw BackendApiException(
+          'Server request failed (${response.statusCode}). Check the backend deployment.',
+        );
+      }
+      rethrow;
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final detail = decoded is Map<String, dynamic> ? decoded['detail'] : null;
       throw BackendApiException(
