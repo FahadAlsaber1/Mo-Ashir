@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
 import '../services/backend_api.dart';
-import 'hospital_station.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -312,16 +311,6 @@ class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Refresh',
-                    onPressed: loading
-                        ? null
-                        : () => setState(
-                              () => _statusFuture =
-                                  BackendApi.getThermalCameraStatus(),
-                            ),
-                    icon: const Icon(Icons.refresh),
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -346,48 +335,29 @@ class _ThermalCameraControlCardState extends State<_ThermalCameraControlCard> {
                   ),
                 ],
               ),
-              if (status?.streamUrl.isNotEmpty == true) ...[
-                const SizedBox(height: 6),
-                Text(
-                  status!.streamUrl,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-              ],
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: loading || status == null
-                          ? null
-                          : () => _toggle(status),
-                      icon: loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              running
-                                  ? Icons.power_settings_new
-                                  : Icons.play_arrow_rounded,
-                            ),
-                      label: Text(running ? 'Turn off' : 'Turn on'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const HospitalStationScreen(),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed:
+                      loading || status == null ? null : () => _toggle(status),
+                  icon: loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          running
+                              ? Icons.power_settings_new
+                              : Icons.play_arrow_rounded,
                         ),
-                      ),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Open station'),
-                    ),
+                  label: Text(
+                    running
+                        ? 'Turn thermal camera off'
+                        : 'Turn thermal camera on',
                   ),
-                ],
+                ),
               ),
             ],
           ),
