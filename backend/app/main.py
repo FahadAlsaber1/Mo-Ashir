@@ -49,6 +49,7 @@ _THERMAL_CAMERA_DEVICE_ID = os.environ.get(
     "hospital-main",
 ).strip() or "hospital-main"
 _THERMAL_CAMERA_HEARTBEAT_STALE_SECONDS = 20
+_THERMAL_CAMERA_COMMAND_TIMEOUT_SECONDS = 45
 
 
 def _cors_origins() -> list[str]:
@@ -1912,6 +1913,35 @@ def _thermal_camera_database_payload(
     actual_state = str(device.get("actual_state") or "unknown")
     command_status = str(command.get("status") or "")
     command_pending = command_status in {"pending", "processing"}
+    if command_pending and _thermal_camera_command_is_stale(
+        command.get("requested_at")
+    ):
+        timeout_message = "Thermal camera command timed out. Try again."
+        acknowledged_at = datetime.now(timezone.utc).isoformat()
+        try:
+            (
+                client.table("thermal_camera_commands")
+                .update(
+                    {
+                        "status": "failed",
+                        "acknowledged_at": acknowledged_at,
+                        "error_message": timeout_message,
+                    }
+                )
+                .eq("id", command["id"])
+                .in_("status", ["pending", "processing"])
+                .execute()
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Could not expire the stale thermal camera command.",
+            ) from exc
+        command_status = "failed"
+        command_pending = False
+        command["error_message"] = timeout_message
+        if message is None:
+            message = timeout_message
     desired_state = (
         str(command.get("desired_state") or "off")
         if command_pending
@@ -1960,8 +1990,8 @@ def _queue_thermal_camera_command(
                 "acknowledged_at": now,
                 "error_message": "Replaced by a newer dashboard command.",
             }
-        ).eq("device_id", _THERMAL_CAMERA_DEVICE_ID).eq(
-            "status", "pending"
+        ).eq("device_id", _THERMAL_CAMERA_DEVICE_ID).in_(
+            "status", ["pending", "processing"]
         ).execute()
         client.table("thermal_camera_commands").insert(
             {
@@ -1991,6 +2021,26 @@ def _thermal_camera_heartbeat_is_fresh(value: Any) -> bool:
         seen_at = seen_at.replace(tzinfo=timezone.utc)
     elapsed = datetime.now(timezone.utc) - seen_at.astimezone(timezone.utc)
     return 0 <= elapsed.total_seconds() <= _THERMAL_CAMERA_HEARTBEAT_STALE_SECONDS
+
+
+def _thermal_camera_command_is_stale(
+    value: Any,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return True
+    try:
+        requested_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if requested_at.tzinfo is None:
+        requested_at = requested_at.replace(tzinfo=timezone.utc)
+    current_time = now or datetime.now(timezone.utc)
+    elapsed = current_time.astimezone(timezone.utc) - requested_at.astimezone(
+        timezone.utc
+    )
+    return elapsed.total_seconds() > _THERMAL_CAMERA_COMMAND_TIMEOUT_SECONDS
 
 
 def _start_thermal_camera_process() -> None:
