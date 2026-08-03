@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/app_session.dart';
@@ -61,17 +63,24 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   final _patientSearch = TextEditingController();
   late Future<List<BackendAppointment>> _appointmentsFuture;
   List<BackendAppointment> _latestAppointments = const [];
+  Timer? _appointmentsRefreshTimer;
+  bool _appointmentsRefreshInProgress = false;
 
   @override
   void initState() {
     super.initState();
     _appointmentsFuture = _loadAppointments();
+    _appointmentsRefreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshAppointments(),
+    );
   }
 
   @override
   void dispose() {
     _previousSearch.dispose();
     _patientSearch.dispose();
+    _appointmentsRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -79,6 +88,23 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     final doctorId = AppSession.doctorId;
     if (doctorId == null) return Future.value(const []);
     return BackendApi.listDoctorAppointments(doctorId: doctorId);
+  }
+
+  Future<void> _refreshAppointments() async {
+    if (_appointmentsRefreshInProgress) return;
+    _appointmentsRefreshInProgress = true;
+    try {
+      final appointments = await _loadAppointments();
+      if (!mounted) return;
+      setState(() {
+        _latestAppointments = appointments;
+        _appointmentsFuture = Future.value(appointments);
+      });
+    } catch (_) {
+      // Keep the last successful dashboard state during transient API outages.
+    } finally {
+      _appointmentsRefreshInProgress = false;
+    }
   }
 
   @override
