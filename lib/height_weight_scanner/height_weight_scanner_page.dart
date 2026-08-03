@@ -119,7 +119,7 @@ class _HeightWeightScannerPageState extends State<HeightWeightScannerPage>
   String _status = 'Preparing camera...';
 
   static const _bodyInstruction =
-      'Stand about 0.5-1 metre from the camera. Make sure your full body, including your head and feet, is visible.';
+      'Center yourself in the camera and take one clear photo.';
 
   static const _orientations = {
     DeviceOrientation.portraitUp: 0,
@@ -292,20 +292,9 @@ class _HeightWeightScannerPageState extends State<HeightWeightScannerPage>
       return;
     }
 
-    if (!capture.faceLikely || !capture.completeBodyLikely) {
-      setState(() {
-        _isWebScanning = false;
-        _measurementState = HeightWeightMeasurementState.failed;
-        _status = capture.faceLikely
-            ? capture.message
-            : 'No face detected. Center your face in the camera and try again.';
-      });
-      return;
-    }
-
     setState(() {
       _measurementState = HeightWeightMeasurementState.validatingImage;
-      _status = 'Photo captured. Sending to body analysis API...';
+      _status = 'Photo captured. Processing height and weight...';
     });
 
     await _analyzeCapturedDataUrl(capture.photoDataUrl);
