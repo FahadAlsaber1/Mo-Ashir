@@ -20,6 +20,8 @@ class ThermalCameraResult {
 class ThermalCamera {
   const ThermalCamera._();
 
+  static const int readingSeconds = 2;
+
   static const String endpoint = String.fromEnvironment(
     'THERMAL_CAMERA_API_URL',
     defaultValue: '',
@@ -37,6 +39,7 @@ class ThermalCamera {
             Uri.parse(endpoint),
             headers: const {'Content-Type': 'application/json'},
             body: jsonEncode({
+              'reading_seconds': readingSeconds,
               if (patientId != null && patientId.trim().isNotEmpty)
                 'patient_id': patientId.trim(),
               if (patientName != null && patientName.trim().isNotEmpty)

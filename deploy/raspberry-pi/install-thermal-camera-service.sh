@@ -18,7 +18,7 @@ sudo chmod +x "${INSTALL_DIR}/thermal_camera_agent.py"
 if [ ! -f "${ENV_FILE}" ]; then
   sudo tee "${ENV_FILE}" >/dev/null <<'EOF'
 # Replace this with the command that starts your real Raspberry Pi thermal camera bridge.
-# The bridge should expose an HTTP endpoint that returns:
+# The bridge should accept {"reading_seconds": 2} and expose an HTTP endpoint that returns:
 # {"temperature_c": 37.2, "face_recognition_confirmed": true, "captured_at": "2026-07-31T12:00:00Z"}
 MOASHIR_THERMAL_CAMERA_COMMAND="python3 /opt/moashir/thermal_camera_bridge.py --host 0.0.0.0 --port 9000"
 SUPABASE_URL="https://your-project-ref.supabase.co"

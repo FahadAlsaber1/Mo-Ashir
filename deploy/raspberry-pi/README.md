@@ -47,6 +47,10 @@ The bridge endpoint must return JSON like:
 }
 ```
 
+The Flutter request includes `"reading_seconds": 2`. The bridge must use this
+value as the thermal sampling and averaging window instead of its old
+five-second default.
+
 ## Check Status
 
 ```sh
