@@ -70,7 +70,7 @@ sudo systemctl stop moashir-thermal-camera-agent.service
 Build the Flutter web app with the Pi endpoint:
 
 ```sh
-flutter build web --release --dart-define=THERMAL_CAMERA_API_URL=http://RASPBERRY_PI_IP:9000
+flutter build web --release --dart-define=THERMAL_CAMERA_API_URL=http://RASPBERRY_PI_IP:5000/read_temperature
 ```
 
 Replace `RASPBERRY_PI_IP` with the Pi address on the hospital network.

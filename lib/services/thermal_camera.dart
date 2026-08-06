@@ -24,7 +24,7 @@ class ThermalCamera {
 
   static const String endpoint = String.fromEnvironment(
     'THERMAL_CAMERA_API_URL',
-    defaultValue: '',
+    defaultValue: 'http://172.20.10.2:5000/read_temperature',
   );
 
   static Future<ThermalCameraResult?> captureVerifiedTemperature({
