@@ -16,6 +16,7 @@ class AdminShell extends StatefulWidget {
 
 class _AdminShellState extends State<AdminShell> {
   late Future<_AdminDashboardData> _dashboardFuture;
+  bool _resettingDemoAppointment = false;
 
   @override
   void initState() {
@@ -50,6 +51,49 @@ class _AdminShellState extends State<AdminShell> {
       reviews: results[2] as List<BackendDoctorReview>,
       appointmentsByDoctor: appointmentsByDoctor,
     );
+  }
+
+  Future<void> _resetDemoAppointment() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Fahad appointment?'),
+        content: const Text(
+          'This deletes Fahad\'s active appointment and medicines, then creates '
+          'one appointment with all vitals except temperature.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _resettingDemoAppointment = true);
+    try {
+      await BackendApi.resetFahadDemoAppointment();
+      if (!mounted) return;
+      setState(() => _dashboardFuture = _loadDashboard());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fahad test appointment is ready.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not reset appointment: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _resettingDemoAppointment = false);
+      }
+    }
   }
 
   @override
@@ -128,6 +172,11 @@ class _AdminShellState extends State<AdminShell> {
               ),
               const SizedBox(height: 24),
               const _ThermalCameraControlCard(),
+              const SizedBox(height: 12),
+              _DemoAppointmentControlCard(
+                busy: _resettingDemoAppointment,
+                onReset: _resetDemoAppointment,
+              ),
               const SizedBox(height: 24),
               const _AdminSectionTitle('Doctors'),
               const SizedBox(height: 10),
@@ -156,6 +205,51 @@ class _AdminShellState extends State<AdminShell> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _DemoAppointmentControlCard extends StatelessWidget {
+  const _DemoAppointmentControlCard({
+    required this.busy,
+    required this.onReset,
+  });
+
+  final bool busy;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_repeat_outlined, color: primary),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Fahad test appointment',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: busy ? null : onReset,
+            icon: busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.restart_alt),
+            label: const Text('Reset'),
+          ),
+        ],
       ),
     );
   }

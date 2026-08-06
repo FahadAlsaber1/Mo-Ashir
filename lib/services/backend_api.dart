@@ -689,6 +689,17 @@ class BackendApi {
         .toList();
   }
 
+  static Future<BackendAppointment> resetFahadDemoAppointment() async {
+    final data = await _post('/api/demo/reset-fahad-appointment', const {});
+    if (data is! Map<String, dynamic> ||
+        data['appointment'] is! Map<String, dynamic>) {
+      throw BackendApiException('Invalid appointment reset response.');
+    }
+    return BackendAppointment.fromJson(
+      data['appointment'] as Map<String, dynamic>,
+    );
+  }
+
   static Future<BackendVital> createFahadTemperature({
     required double temperatureC,
     required DateTime capturedAt,

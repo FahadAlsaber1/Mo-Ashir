@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -969,6 +970,114 @@ def create_patient_vitals(
         ) from exc
 
     return {"vitals": response.data or []}
+
+
+@app.post("/api/demo/reset-fahad-appointment")
+def reset_demo_fahad_appointment() -> dict[str, Any]:
+    client = _service_client()
+    patient_response = (
+        client.table("patient_profiles")
+        .select("id, full_name")
+        .eq("email", "fahad@hotmail.com")
+        .limit(1)
+        .execute()
+    )
+    if not patient_response.data:
+        raise HTTPException(status_code=404, detail="Fahad patient account not found.")
+
+    patient = patient_response.data[0]
+    doctor = _load_doctor_by_name(client, "Dr. Moashir Demo")
+    if doctor is None:
+        raise HTTPException(status_code=404, detail="Demo doctor not found.")
+
+    try:
+        active_response = (
+            client.table("appointments")
+            .select("id")
+            .eq("patient_id", patient["id"])
+            .in_("status", ["scheduled", "checked_in", "in_clinic"])
+            .execute()
+        )
+        active_appointments = active_response.data or []
+        for active in active_appointments:
+            appointment_id = active["id"]
+            (
+                client.table("patient_vitals")
+                .delete()
+                .eq("appointment_id", appointment_id)
+                .execute()
+            )
+            client.table("appointments").delete().eq(
+                "id", appointment_id
+            ).execute()
+
+        medicine_response = (
+            client.table("medications")
+            .delete()
+            .eq("patient_id", patient["id"])
+            .execute()
+        )
+
+        now = datetime.now(ZoneInfo("Asia/Riyadh"))
+        appointment_response = (
+            client.table("appointments")
+            .insert(
+                {
+                    "patient_id": patient["id"],
+                    "doctor_id": doctor["id"],
+                    "appointment_at": now.isoformat(),
+                    "date_label": f"Today, {now.day} {now.strftime('%b')}",
+                    "time_label": "10:30 AM",
+                    "reason": "Vital signs review",
+                    "notes": (
+                        "All vitals recorded; awaiting thermal camera temperature."
+                    ),
+                    "visit_mode": "in_clinic",
+                    "ctas_level": 2,
+                    "status": "scheduled",
+                }
+            )
+            .execute()
+        )
+        appointment = appointment_response.data[0]
+        vital_rows = [
+            ("height", "175.0 cm", "camera"),
+            ("weight", "70.0 kg", "camera"),
+            ("blood_pressure", "121/77 mmHg", "app"),
+            ("oxygen", "98%", "app"),
+            ("respiratory_rate", "16 breaths/min", "app"),
+            ("heart_rate", "78 bpm", "app"),
+        ]
+        vitals_response = (
+            client.table("patient_vitals")
+            .insert(
+                [
+                    {
+                        "patient_id": patient["id"],
+                        "appointment_id": appointment["id"],
+                        "vital_type": vital_type,
+                        "value": value,
+                        "source": source,
+                        "approval_status": "pending",
+                        "measured_at": now.isoformat(),
+                    }
+                    for vital_type, value, source in vital_rows
+                ]
+            )
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not reset Fahad's demo appointment.",
+        ) from exc
+
+    return {
+        "appointment": _appointment_payload(appointment, doctor),
+        "deleted_appointments": len(active_appointments),
+        "deleted_medications": len(medicine_response.data or []),
+        "vitals_created": len(vitals_response.data or []),
+    }
 
 
 @app.post("/api/demo/fahad-account/temperature")
